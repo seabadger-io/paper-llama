@@ -1,0 +1,14 @@
+services:
+  paper-llama:
+    build: .
+    container_name: paper-llama
+    restart: unless-stopped
+    ports:
+      - "8021:8021"
+    volumes:
+      - data:/app/data
+    # If Ollama and Paperless-ngx are on the same docker network, you can link them here
+    # networks:
+    #   - your_paperless_network
+volumes:
+  data:

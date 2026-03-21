@@ -1,0 +1,79 @@
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON
+from datetime import datetime
+import bcrypt
+
+from .database import Base
+
+class AdminUser(Base):
+    """Stores the single admin user credentials."""
+    __tablename__ = "admin_users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+
+    def verify_password(self, plain_password: str) -> bool:
+        password_bytes = plain_password.encode('utf-8')
+        if len(password_bytes) > 72:
+            password_bytes = password_bytes[:72]
+        return bcrypt.checkpw(password_bytes, self.hashed_password.encode('utf-8'))
+
+    @staticmethod
+    def get_password_hash(password: str) -> str:
+        # bcrypt can only handle strings up to 72 bytes
+        password_bytes = password.encode('utf-8')
+        if len(password_bytes) > 72:
+            password_bytes = password_bytes[:72]
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password_bytes, salt).decode('utf-8')
+
+class AppSettings(Base):
+    """Stores the global application configuration."""
+    __tablename__ = "app_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Paperless Settings
+    paperless_url = Column(String, nullable=True)
+    paperless_token = Column(String, nullable=True)
+    
+    # Ollama Settings
+    ollama_url = Column(String, default="http://localhost:11434")
+    ollama_model = Column(String, nullable=True)
+    
+    # Processing Settings
+    update_title = Column(Boolean, default=True)
+    update_correspondent = Column(Boolean, default=True)
+    update_document_type = Column(Boolean, default=True)
+    update_tags = Column(Boolean, default=True)
+    document_word_limit = Column(Integer, default=1500)
+    schedule_interval_minutes = Column(Integer, default=0) # 0 means manual/webhook only
+    remove_query_tag = Column(Boolean, default=True) # Whether to remove the query tag after processing
+    query_tag_id = Column(Integer, nullable=True) # Tag ID used to poll documents
+    force_process_tag_id = Column(Integer, nullable=True) # Tag ID that forces reprocessing
+
+class ProcessedDocument(Base):
+    """Tracks documents that have already been processed to avoid infinite loops."""
+    __tablename__ = "processed_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, unique=True, index=True, nullable=False)
+    processed_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="success") # success, error, skipped
+    error_message = Column(Text, nullable=True)
+
+class DocumentChangeLog(Base):
+    """Audit log of changes made to documents."""
+    __tablename__ = "document_changelog"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, index=True, nullable=False)
+    changed_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Store JSON strings for what was changed
+    original_state = Column(JSON, nullable=True) # {title, tags, correspondent, document_type}
+    new_state = Column(JSON, nullable=True)      # {title, tags, correspondent, document_type}
+    
+    # Metadata about the AI decision
+    prompt_used = Column(Text, nullable=True)
+    ai_response = Column(Text, nullable=True)

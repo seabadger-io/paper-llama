@@ -1,0 +1,142 @@
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime
+
+from backend.processor import DocumentProcessor
+from backend.models import AppSettings, ProcessedDocument, DocumentChangeLog
+
+class MockDB:
+    def __init__(self):
+        self.add_called_count = 0
+        self.commit_called_count = 0
+        self.rollback_called_count = 0
+        # For existing ProcessedDocument lookups
+        self.scalar_return = None
+        
+    async def execute(self, query):
+        res = MagicMock()
+        res.scalar_one_or_none.return_value = self.scalar_return
+        return res
+        
+    def add(self, item):
+        self.add_called_count += 1
+        
+    async def commit(self):
+        self.commit_called_count += 1
+        
+    async def rollback(self):
+        self.rollback_called_count += 1
+
+@pytest.fixture
+def mock_db_session():
+    return MockDB()
+
+@pytest.fixture
+def mock_settings():
+    settings = AppSettings()
+    settings.paperless_url = "http://test"
+    settings.paperless_token = "token"
+    settings.ollama_url = "http://ollama"
+    settings.ollama_model = "llama"
+    settings.update_title = True
+    settings.update_tags = True
+    settings.update_correspondent = True
+    settings.remove_query_tag = True
+    settings.query_tag_id = 1
+    settings.force_process_tag_id = None
+    settings.document_word_limit = 1500
+    return settings
+
+@pytest.fixture
+def processor(mock_db_session, mock_settings):
+    # Reset cache before each test
+    DocumentProcessor._metadata_cache["timestamp"] = 0 
+    DocumentProcessor._metadata_cache["tags"] = []
+    
+    proc = DocumentProcessor(mock_db_session, mock_settings)
+    proc.paperless = AsyncMock()
+    proc.ollama = AsyncMock()
+    return proc
+
+@pytest.mark.asyncio
+async def test_get_cached_metadata_fetches_once(processor):
+    processor.paperless.get_tags.return_value = [{"id": 1, "name": "tag1"}]
+    processor.paperless.get_correspondents.return_value = []
+    processor.paperless.get_document_types.return_value = []
+    
+    # First call should fetch
+    t1, c1, d1 = await processor.get_cached_metadata()
+    assert len(t1) == 1
+    assert processor.paperless.get_tags.call_count == 1
+    
+    # Second call should use cache
+    t2, c2, d2 = await processor.get_cached_metadata()
+    assert processor.paperless.get_tags.call_count == 1
+    assert t1 == t2
+
+@pytest.mark.asyncio
+async def test_process_document_success(processor, mocker):
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = [{"id": 1, "name": "inbox"}, {"id": 2, "name": "receipt"}]
+    DocumentProcessor._metadata_cache["correspondents"] = [{"id": 1, "name": "Apple"}]
+    DocumentProcessor._metadata_cache["document_types"] = []
+    
+    processor.paperless.get_document.return_value = {
+        "id": 100,
+        "content": "Invoice from Apple for $10",
+        "title": "Scan 123",
+        "tags": [1], 
+        "correspondent": None,
+        "document_type": None
+    }
+    
+    processor.ollama.generate_completion.return_value = '''```json
+    {
+        "title": "Apple Receipt",
+        "correspondent_id": 1,
+        "tag_ids": [2]
+    }
+    ```'''
+    
+    await processor.process_document(100)
+    
+    processor.paperless.update_document.assert_called_once_with(
+        100,
+        title="Apple Receipt",
+        tags=[2],
+        correspondent_id=1,
+        document_type_id=None
+    )
+    
+    assert processor.db.add_called_count == 2
+    assert processor.db.commit_called_count == 2
+
+@pytest.mark.asyncio
+async def test_process_document_force_tag_removal(processor, mock_settings):
+    mock_settings.force_process_tag_id = 99
+    
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = [{"id": 99, "name": "force"}]
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+    
+    processor.paperless.get_document.return_value = {
+        "id": 100,
+        "content": "Test",
+        "title": "Scan 123",
+        "tags": [99],
+        "correspondent": None,
+        "document_type": None
+    }
+    
+    processor.ollama.generate_completion.return_value = '{"title": "Test Doc", "tag_ids": []}'
+    
+    await processor.process_document(100)
+    
+    processor.paperless.update_document.assert_called_once_with(
+        100,
+        title="Test Doc",
+        tags=[],
+        correspondent_id=None,
+        document_type_id=None
+    )
