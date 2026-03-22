@@ -161,9 +161,9 @@ async def get_change_logs(
     logs = result.scalars().all()
 
     return [{
-        "id": l.id,
-        "document_id": l.document_id,
-        "changed_at": l.changed_at,
-        "original_state": l.original_state,
-        "new_state": l.new_state
-    } for l in logs]
+        "id": log.id,
+        "document_id": log.document_id,
+        "changed_at": log.changed_at,
+        "original_state": log.original_state,
+        "new_state": log.new_state
+    } for log in logs]

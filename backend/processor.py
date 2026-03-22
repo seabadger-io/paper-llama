@@ -218,14 +218,16 @@ class DocumentProcessor:
             )
 
             def _resolve_id(items, item_id):
-                if item_id is None: return None
+                if item_id is None:
+                    return None
                 for i in items:
                     if i.get("id") == item_id:
                         return f"{i.get('id')} ({i.get('name')})"
                 return str(item_id)
 
             def _resolve_ids(items, id_list):
-                if not id_list: return []
+                if not id_list:
+                    return []
                 return [_resolve_id(items, i) for i in id_list]
 
             log_original = {

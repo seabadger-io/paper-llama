@@ -4,13 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "lint:backend": "python -m ruff check backend/",
-    "format:backend": "python -m ruff format backend/",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:frontend": "vitest run",
+    "test:backend": "node scripts/run_python.js -m pytest backend/tests/",
+    "lint:backend": "node scripts/run_python.js -m ruff check backend/",
+    "format:backend": "node scripts/run_python.js -m ruff format backend/",
     "lint:frontend": "eslint frontend/assets/",
     "format:frontend": "prettier --write frontend/assets/",
     "lint": "npm run lint:backend && npm run lint:frontend",
-    "format": "npm run format:backend && npm run format:frontend"
+    "format": "npm run format:backend && npm run format:frontend",
+    "prepare": "husky"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +25,7 @@
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.8.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.0.1",
     "prettier": "^3.8.1",
     "vitest": "^4.1.0",

@@ -61,7 +61,7 @@ async def test_get_current_settings():
 
     result = await get_current_settings(db=mock_db, current_user=mock_user)
     assert result.paperless_url == "http://test"
-    assert result.remove_query_tag == True
+    assert result.remove_query_tag is True
 
 @pytest.mark.asyncio
 async def test_update_settings(mocker):
