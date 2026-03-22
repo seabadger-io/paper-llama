@@ -121,6 +121,11 @@ export default {
                             </div>
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-gray-700">Custom Instructions</label>
+                            <p class="text-xs text-gray-500 mb-1">Optional. Add custom instructions for the AI prompt (e.g. "Be very concise").</p>
+                            <textarea v-model="settings.custom_prompt" rows="3" class="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm"></textarea>
+                        </div>
+                        <div>
                             <label class="block text-sm font-medium text-gray-700">Document Word Limit</label>
                             <p class="text-xs text-gray-500 mb-1">Max words to send to AI (0 = unlimited).</p>
                             <input type="number" v-model="settings.document_word_limit" min="0" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">

@@ -51,6 +51,7 @@ class AppSettings(Base):
     remove_query_tag = Column(Boolean, default=True) # Whether to remove the query tag after processing
     query_tag_id = Column(Integer, nullable=True) # Tag ID used to poll documents
     force_process_tag_id = Column(Integer, nullable=True) # Tag ID that forces reprocessing
+    custom_prompt = Column(Text, nullable=True) # Custom instructions for the AI
 
 class ProcessedDocument(Base):
     """Tracks documents that have already been processed to avoid infinite loops."""

@@ -35,6 +35,7 @@ class SetupWizardRequest(BaseModel):
     remove_query_tag: bool = True
     query_tag_id: int | None = None
     force_process_tag_id: int | None = None
+    custom_prompt: str | None = None
 
 @router.post("/wizard")
 async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depends(get_db)):
@@ -67,7 +68,8 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         schedule_interval_minutes=request.schedule_interval_minutes,
         remove_query_tag=request.remove_query_tag,
         query_tag_id=request.query_tag_id,
-        force_process_tag_id=request.force_process_tag_id
+        force_process_tag_id=request.force_process_tag_id,
+        custom_prompt=request.custom_prompt
     )
     db.add(new_settings)
     

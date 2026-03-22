@@ -67,6 +67,20 @@ updated to an existing tag or None.
 
   **Note:** If the Query Tag is configured, the document will only be re-processed if it has both the Query Tag and the Force Process Tag.
 
+## Database Migrations 🗄️
+
+The application uses Alembic to manage database schema updates.
+
+**Using Docker (Automatic):**
+When using Docker Compose, the container automatically applies any pending migrations before starting the application. No manual steps are required.
+
+**Using Local Python (Manual):**
+If running locally without Docker, you must apply new migrations manually after updating your codebase:
+```bash
+cd backend
+alembic upgrade head
+```
+
 ## Administration 🛠️
 
 If you ever forget your admin password and need to reset it, you can run the `reset_admin.py` utility.

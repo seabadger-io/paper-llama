@@ -36,6 +36,7 @@ class SettingsUpdate(BaseModel):
     remove_query_tag: bool = True
     query_tag_id: int | None = None
     force_process_tag_id: int | None = None
+    custom_prompt: str | None = None
 
 class SetupStatus(BaseModel):
     is_setup: bool
@@ -97,7 +98,8 @@ async def get_current_settings(
         schedule_interval_minutes=settings.schedule_interval_minutes,
         remove_query_tag=settings.remove_query_tag,
         query_tag_id=settings.query_tag_id,
-        force_process_tag_id=settings.force_process_tag_id
+        force_process_tag_id=settings.force_process_tag_id,
+        custom_prompt=settings.custom_prompt
     )
 
 @router.put("/settings")
@@ -126,6 +128,7 @@ async def update_settings(
     settings.remove_query_tag = settings_data.remove_query_tag
     settings.query_tag_id = settings_data.query_tag_id
     settings.force_process_tag_id = settings_data.force_process_tag_id
+    settings.custom_prompt = settings_data.custom_prompt
     
     await db.commit()
     

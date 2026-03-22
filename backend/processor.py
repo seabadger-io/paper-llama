@@ -77,6 +77,9 @@ class DocumentProcessor:
             
         prompt_parts.append(json.dumps(json_format, indent=4))
         
+        if self.settings.custom_prompt:
+            prompt_parts.append(f"\nADDITIONAL INSTRUCTIONS:\n{self.settings.custom_prompt}")
+            
         if self.settings.document_word_limit > 0:
             words = document_content.split()
             truncated_content = " ".join(words[:self.settings.document_word_limit])
