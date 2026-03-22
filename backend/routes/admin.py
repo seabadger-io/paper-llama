@@ -1,14 +1,14 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Dict
+from sqlalchemy.future import select
 
 from ..database import get_db
+from ..dependencies import create_access_token, get_current_user
 from ..models import AdminUser, AppSettings, DocumentChangeLog
-from ..dependencies import get_current_user, create_access_token, get_settings
-from ..scheduler import update_scheduler, trigger_workflow
+from ..scheduler import trigger_workflow, update_scheduler
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -68,23 +68,23 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     access_token = create_access_token(data={"sub": user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
 # --- Settings ---
 @router.get("/settings", response_model=SettingsUpdate)
 async def get_current_settings(
-    db: AsyncSession = Depends(get_db), 
+    db: AsyncSession = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
 ):
     query = select(AppSettings).limit(1)
     result = await db.execute(query)
     settings = result.scalar_one_or_none()
-    
+
     if not settings:
         raise HTTPException(status_code=404, detail="Settings not found")
-        
+
     return SettingsUpdate(
         paperless_url=settings.paperless_url,
         paperless_token=settings.paperless_token,
@@ -111,10 +111,10 @@ async def update_settings(
     query = select(AppSettings).limit(1)
     result = await db.execute(query)
     settings = result.scalar_one_or_none()
-    
+
     if not settings:
         raise HTTPException(status_code=404, detail="Settings not found")
-        
+
     settings.paperless_url = settings_data.paperless_url
     settings.paperless_token = settings_data.paperless_token
     settings.ollama_url = settings_data.ollama_url
@@ -129,12 +129,12 @@ async def update_settings(
     settings.query_tag_id = settings_data.query_tag_id
     settings.force_process_tag_id = settings_data.force_process_tag_id
     settings.custom_prompt = settings_data.custom_prompt
-    
+
     await db.commit()
-    
+
     # Update scheduler
     update_scheduler(settings.schedule_interval_minutes)
-    
+
     return {"message": "Settings updated successfully"}
 
 @router.post("/trigger")
@@ -150,7 +150,7 @@ async def trigger_processing(
 
 @router.get("/logs")
 async def get_change_logs(
-    limit: int = 50, 
+    limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user)
@@ -159,7 +159,7 @@ async def get_change_logs(
     query = select(DocumentChangeLog).order_by(DocumentChangeLog.changed_at.desc()).limit(limit).offset(offset)
     result = await db.execute(query)
     logs = result.scalars().all()
-    
+
     return [{
         "id": l.id,
         "document_id": l.document_id,

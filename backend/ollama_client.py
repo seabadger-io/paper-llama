@@ -1,6 +1,6 @@
-import httpx
 import logging
-from typing import List, Dict, Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -9,7 +9,7 @@ class OllamaClient:
         self.base_url = base_url.rstrip('/')
         self.timeout = 120.0 # AI generation can be slow
 
-    async def get_models(self) -> List[Dict]:
+    async def get_models(self) -> list[dict]:
         """Fetch available models from the Ollama instance."""
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
@@ -29,11 +29,11 @@ class OllamaClient:
             "system": system,
             "stream": False,
         }
-        
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
                 response = await client.post(
-                    f"{self.base_url}/api/generate", 
+                    f"{self.base_url}/api/generate",
                     json=payload
                 )
                 response.raise_for_status()

@@ -1,8 +1,9 @@
-import pytest
-from httpx import AsyncClient
-
 # Provide an event loop fixture for pytest-asyncio to avoid ScopeMismatch errors when testing module-scoped fixtures
 import asyncio
+
+import pytest
+
+
 @pytest.fixture(scope="session")
 def event_loop():
     try:

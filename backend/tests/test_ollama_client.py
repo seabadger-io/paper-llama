@@ -1,7 +1,9 @@
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
+
 from backend.ollama_client import OllamaClient
+
 
 @pytest.fixture
 def ollama_client():
@@ -21,11 +23,11 @@ async def test_generate_completion(mocker, ollama_client):
     mocker.patch("httpx.AsyncClient.__aenter__", return_value=mock_client_instance)
 
     response_text = await ollama_client.generate_completion(
-        model="llama3", 
+        model="llama3",
         prompt="Tell me a joke",
         system="You are an assistant"
     )
-    
+
     # Verify standard request payload to Ollama
     mock_client_instance.post.assert_called_once_with(
         "http://test_ollama:11434/api/generate",

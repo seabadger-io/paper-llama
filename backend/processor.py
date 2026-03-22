@@ -1,13 +1,13 @@
 import json
 import logging
 import time
-from typing import List, Dict, Any, Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from .paperless_client import PaperlessClient
+from .models import AppSettings, DocumentChangeLog, ProcessedDocument
 from .ollama_client import OllamaClient
-from .models import AppSettings, ProcessedDocument, DocumentChangeLog
+from .paperless_client import PaperlessClient
 
 logger = logging.getLogger(__name__)
 
@@ -23,25 +23,25 @@ class DocumentProcessor:
         self.db = db_session
         self.settings = settings
         self.paperless = PaperlessClient(
-            base_url=settings.paperless_url, 
+            base_url=settings.paperless_url,
             token=settings.paperless_token
         )
         self.ollama = OllamaClient(base_url=settings.ollama_url)
 
     async def _build_prompt(
-        self, 
-        document_content: str, 
-        tags: List[Dict], 
-        correspondents: List[Dict], 
-        document_types: List[Dict]
+        self,
+        document_content: str,
+        tags: list[dict],
+        correspondents: list[dict],
+        document_types: list[dict]
     ) -> str:
         """Constructs the prompt for Ollama."""
-        
+
         prompt_parts = [
             "Analyze the document text below and select the best matching",
             "metadata from the provided lists based on the rules.\n"
         ]
-        
+
         if self.settings.update_correspondent:
             corr_str = ", ".join([f"{c['id']}:{c['name']}" for c in correspondents])
             prompt_parts.append(f"AVAILABLE CORRESPONDENTS (ID:Name): {corr_str}")
@@ -51,9 +51,9 @@ class DocumentProcessor:
         if self.settings.update_tags:
             tags_str = ", ".join([f"{t['id']}:{t['name']}" for t in tags])
             prompt_parts.append(f"AVAILABLE TAGS (ID:Name): {tags_str}")
-            
+
         prompt_parts.append("\nRULES:\n* You MUST respond with ONLY valid JSON and absolutely NO extra text, comments, or markdown blocks outside the JSON.")
-        
+
         if self.settings.update_correspondent:
             prompt_parts.append("* Select EXACTLY ONE correspondent ID, or null if absolutely none match. If you are not sure, select null. Do not guess. Consider if the document contains any of the existing correspondent names (either in it's short or long form), especially in the first part of the document.")
         if self.settings.update_document_type:
@@ -62,9 +62,9 @@ class DocumentProcessor:
             prompt_parts.append("* Select maximum 5 tag IDs that best describe the document. Only select tags if they are actually relevant to the document. Don't select tags just because they are available or because they are in the document. Select tags that can be used to identify and categorize the document. For example, an employment contract should not be tagged as pension even if pension is mentioned in the document.")
         if self.settings.update_title:
             prompt_parts.append("* Extract a short, concise title for the document based on its contents.")
-            
+
         prompt_parts.append("\nEXPECTED JSON FORMAT:")
-        
+
         json_format = {}
         if self.settings.update_title:
             json_format["title"] = "Short descriptive title"
@@ -74,19 +74,19 @@ class DocumentProcessor:
             json_format["document_type_id"] = 45
         if self.settings.update_tags:
             json_format["tag_ids"] = [1, 2, 3]
-            
+
         prompt_parts.append(json.dumps(json_format, indent=4))
-        
+
         if self.settings.custom_prompt:
             prompt_parts.append(f"\nADDITIONAL INSTRUCTIONS:\n{self.settings.custom_prompt}")
-            
+
         if self.settings.document_word_limit > 0:
             words = document_content.split()
             truncated_content = " ".join(words[:self.settings.document_word_limit])
             prompt_parts.append(f"\nDOCUMENT TEXT:\n{truncated_content}\n")
         else:
             prompt_parts.append(f"\nDOCUMENT TEXT:\n{document_content}\n")
-        
+
         return "\n".join(prompt_parts)
 
     async def get_cached_metadata(self):
@@ -98,14 +98,14 @@ class DocumentProcessor:
             tags = await self.paperless.get_tags()
             correspondents = await self.paperless.get_correspondents()
             document_types = await self.paperless.get_document_types()
-            
+
             DocumentProcessor._metadata_cache = {
                 "tags": tags,
                 "correspondents": correspondents,
                 "document_types": document_types,
                 "timestamp": current_time
             }
-            
+
         return (
             DocumentProcessor._metadata_cache["tags"],
             DocumentProcessor._metadata_cache["correspondents"],
@@ -115,14 +115,14 @@ class DocumentProcessor:
     async def process_document(self, document_id: int):
         """Main processing flow for a single document."""
         logger.info(f"Processing document {document_id}")
-        
+
         # 1. Fetch document and metadata
         try:
             doc = await self.paperless.get_document(document_id)
             doc_content = doc.get("content", "")
-            
+
             tags, correspondents, document_types = await self.get_cached_metadata()
-            
+
         except Exception as e:
             logger.error(f"Failed to fetch data from Paperless for doc {document_id}: {e}")
             await self._mark_processed(document_id, "error", str(e))
@@ -132,12 +132,12 @@ class DocumentProcessor:
         prompt_tags = [t for t in tags if t['id'] not in (self.settings.query_tag_id, self.settings.force_process_tag_id)]
         prompt = await self._build_prompt(doc_content, prompt_tags, correspondents, document_types)
         system_prompt = "You are a document classification AI. You output valid JSON only."
-        
+
         ai_processing_time_ms = 0
         try:
             start_time = time.perf_counter()
             ai_response_text = await self.ollama.generate_completion(
-                model=self.settings.ollama_model, 
+                model=self.settings.ollama_model,
                 prompt=prompt,
                 system=system_prompt
             )
@@ -149,7 +149,7 @@ class DocumentProcessor:
                 json_str = ai_response_text.split("```")[1].split("```")[0].strip()
             else:
                 json_str = ai_response_text.strip()
-                
+
             ai_data = json.loads(json_str)
         except Exception as e:
             logger.error(f"Failed to parse Ollama response for doc {document_id}. Response: {ai_response_text[:100]}... Error: {e}")
@@ -163,7 +163,7 @@ class DocumentProcessor:
             "correspondent": doc.get("correspondent"),
             "document_type": doc.get("document_type")
         }
-        
+
         new_corr_id = (
             ai_data.get("correspondent_id")
             if self.settings.update_correspondent and "correspondent_id" in ai_data
@@ -175,18 +175,18 @@ class DocumentProcessor:
             else original_state["document_type"]
         )
         new_tag_ids = ai_data.get("tag_ids", []) if self.settings.update_tags else []
-        
+
         # Remove trigger tags if configured
         remove_tag_ids = []
         if self.settings.remove_query_tag and self.settings.query_tag_id:
             remove_tag_ids.append(self.settings.query_tag_id)
-            
+
         if self.settings.force_process_tag_id:
             remove_tag_ids.append(self.settings.force_process_tag_id)
-            
+
         existing_tags = original_state["tags"]
         merged_tags = list(set(existing_tags) | set(new_tag_ids))
-        
+
         if remove_tag_ids:
             final_tags = [tid for tid in merged_tags if tid not in remove_tag_ids]
         else:
@@ -216,14 +216,14 @@ class DocumentProcessor:
                 document_id,
                 **update_kwargs
             )
-            
+
             def _resolve_id(items, item_id):
                 if item_id is None: return None
                 for i in items:
                     if i.get("id") == item_id:
                         return f"{i.get('id')} ({i.get('name')})"
                 return str(item_id)
-                
+
             def _resolve_ids(items, id_list):
                 if not id_list: return []
                 return [_resolve_id(items, i) for i in id_list]
@@ -254,9 +254,9 @@ class DocumentProcessor:
             self.db.add(log_entry)
             await self._mark_processed(document_id, "success")
             await self.db.commit()
-            
+
             logger.info(f"Successfully processed document {document_id}")
-            
+
         except Exception as e:
             await self.db.rollback()
             logger.error(f"Failed to apply updates to Paperless for doc {document_id}: {e}")
@@ -267,7 +267,7 @@ class DocumentProcessor:
         query = select(ProcessedDocument).where(ProcessedDocument.document_id == document_id)
         result = await self.db.execute(query)
         existing = result.scalar_one_or_none()
-        
+
         if existing:
             existing.status = status
             existing.error_message = error_message
@@ -278,5 +278,5 @@ class DocumentProcessor:
                 error_message=error_message
             )
             self.db.add(new_record)
-        
+
         await self.db.commit()

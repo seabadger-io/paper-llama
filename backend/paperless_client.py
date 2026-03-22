@@ -1,6 +1,7 @@
-import httpx
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Any
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -13,14 +14,14 @@ class PaperlessClient:
         }
         self.timeout = 15.0
 
-    async def _get(self, endpoint: str, params: Optional[Dict] = None) -> Any:
+    async def _get(self, endpoint: str, params: dict | None = None) -> Any:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             url = f"{self.base_url}/api/{endpoint}"
             response = await client.get(url, headers=self.headers, params=params)
             response.raise_for_status()
             return response.json()
 
-    async def _get_all(self, endpoint: str, params: Optional[Dict] = None) -> List[Dict]:
+    async def _get_all(self, endpoint: str, params: dict | None = None) -> list[dict]:
         results = []
         url = f"{self.base_url}/api/{endpoint}"
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -33,7 +34,7 @@ class PaperlessClient:
                 params = None  # subsequent URLs already contain pagination query parameters
         return results
 
-    async def _patch(self, endpoint: str, json_data: Dict) -> Any:
+    async def _patch(self, endpoint: str, json_data: dict) -> Any:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             url = f"{self.base_url}/api/{endpoint}"
             response = await client.patch(url, headers=self.headers, json=json_data)
@@ -42,40 +43,40 @@ class PaperlessClient:
 
     # --- Fetch Metadata ---
 
-    async def get_tags(self) -> List[Dict]:
+    async def get_tags(self) -> list[dict]:
         return await self._get_all("tags/")
 
-    async def get_correspondents(self) -> List[Dict]:
+    async def get_correspondents(self) -> list[dict]:
         return await self._get_all("correspondents/")
 
-    async def get_document_types(self) -> List[Dict]:
+    async def get_document_types(self) -> list[dict]:
         return await self._get_all("document_types/")
 
     # --- Fetch Documents ---
 
-    async def get_documents(self, query: Optional[str] = None, tags: Optional[List[int]] = None) -> List[Dict]:
+    async def get_documents(self, query: str | None = None, tags: list[int] | None = None) -> list[dict]:
         params = {}
         if query:
             params["query"] = query
         if tags:
             params["tags__id__in"] = ",".join(map(str, tags))
-            
+
         data = await self._get("documents/", params=params)
         return data.get("results", [])
 
-    async def get_document(self, document_id: int) -> Dict:
+    async def get_document(self, document_id: int) -> dict:
         return await self._get(f"documents/{document_id}/")
 
     # --- Update Documents ---
 
     async def update_document(
-        self, 
-        document_id: int, 
-        title: Optional[str] = None,
-        correspondent_id: Optional[int] = None, 
-        document_type_id: Optional[int] = None, 
-        tags: Optional[List[int]] = None
-    ) -> Dict:
+        self,
+        document_id: int,
+        title: str | None = None,
+        correspondent_id: int | None = None,
+        document_type_id: int | None = None,
+        tags: list[int] | None = None
+    ) -> dict:
         update_data = {}
         if title is not None:
             update_data["title"] = title

@@ -4,7 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint:backend": "python -m ruff check backend/",
+    "format:backend": "python -m ruff format backend/",
+    "lint:frontend": "eslint frontend/assets/",
+    "format:frontend": "prettier --write frontend/assets/",
+    "lint": "npm run lint:backend && npm run lint:frontend",
+    "format": "npm run format:backend && npm run format:frontend"
   },
   "keywords": [],
   "author": "",
@@ -13,7 +19,11 @@
   "devDependencies": {
     "@vue/compiler-dom": "^3.5.30",
     "@vue/test-utils": "^2.4.6",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.8.0",
     "jsdom": "^29.0.1",
+    "prettier": "^3.8.1",
     "vitest": "^4.1.0",
     "vue": "^3.5.30"
   }

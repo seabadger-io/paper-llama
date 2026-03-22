@@ -1,5 +1,6 @@
 import os
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
 # Define SQLite database path
@@ -9,15 +10,15 @@ DATABASE_URL = f"sqlite+aiosqlite:///{os.path.join(DATABASE_DIR, 'paper_llama.db
 
 # Create async engine
 engine = create_async_engine(
-    DATABASE_URL, 
+    DATABASE_URL,
     echo=False,  # Set to True for debugging SQL queries
     connect_args={"check_same_thread": False}
 )
 
 # Async session factory
 AsyncSessionLocal = async_sessionmaker(
-    bind=engine, 
-    class_=AsyncSession, 
+    bind=engine,
+    class_=AsyncSession,
     expire_on_commit=False
 )
 

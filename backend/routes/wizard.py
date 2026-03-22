@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from sqlalchemy.future import select
-from sqlalchemy.ext.asyncio import AsyncSession
 import logging
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 from ..database import get_db
 from ..models import AdminUser, AppSettings
@@ -40,7 +41,7 @@ class SetupWizardRequest(BaseModel):
 @router.post("/wizard")
 async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depends(get_db)):
     """Run once to configure the application."""
-    
+
     # Check if already setup
     admin_query = select(AdminUser).limit(1)
     admin_res = await db.execute(admin_query)
@@ -72,9 +73,9 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         custom_prompt=request.custom_prompt
     )
     db.add(new_settings)
-    
+
     await db.commit()
-    
+
     return {"status": "ok", "message": "Setup completed successfully"}
 
 @router.post("/test-ollama")

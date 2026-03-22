@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, Request
 import logging
+
+from fastapi import APIRouter, BackgroundTasks, Request
 
 from ..scheduler import trigger_workflow
 
@@ -18,12 +19,12 @@ async def paperless_webhook(
     """
     try:
         logger.info("Received webhook from Paperless. Triggering workflow loop.")
-        
+
         # Trigger the main workflow queueing mechanism
         background_tasks.add_task(trigger_workflow, from_webhook=True)
-        
+
         return {"status": "queued", "message": "Workflow trigger queued."}
-        
+
     except Exception as e:
         logger.error(f"Error processing webhook: {e}")
         return {"status": "error", "message": str(e)}

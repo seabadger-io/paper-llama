@@ -1,0 +1,6 @@
+node_modules/
+venv/
+backend/
+data/
+*.db
+.pytest_cache/

@@ -1,17 +1,18 @@
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-import uvicorn
-import os
 import logging
+import os
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.future import select
 
-from .database import init_engine, AsyncSessionLocal
+from .database import AsyncSessionLocal, init_engine
 from .models import AppSettings
+from .routes import admin, webhook, wizard
 from .scheduler import start_scheduler, update_scheduler
-from .routes import admin, wizard, webhook
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -22,10 +23,10 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Initializing database...")
     await init_engine()
-    
+
     logger.info("Starting scheduler...")
     start_scheduler()
-    
+
     # Initialize scheduler interval from DB if set
     async with AsyncSessionLocal() as session:
         query = select(AppSettings).limit(1)
@@ -33,7 +34,7 @@ async def lifespan(app: FastAPI):
         settings = result.scalar_one_or_none()
         if settings and settings.schedule_interval_minutes > 0:
             update_scheduler(settings.schedule_interval_minutes)
-            
+
     yield
     # Shutdown
     logger.info("Shutting down...")
@@ -69,7 +70,7 @@ if os.path.exists(assets_dir):
 def serve_spa(catchall: str):
     if catchall.startswith("api/"):
         return {"error": "Not found"}
-        
+
     index_path = os.path.join(frontend_dir, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)

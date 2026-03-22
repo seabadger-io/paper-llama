@@ -1,8 +1,10 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, JSON
 from datetime import datetime
+
 import bcrypt
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
 
 from .database import Base
+
 
 class AdminUser(Base):
     """Stores the single admin user credentials."""
@@ -32,15 +34,15 @@ class AppSettings(Base):
     __tablename__ = "app_settings"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Paperless Settings
     paperless_url = Column(String, nullable=True)
     paperless_token = Column(String, nullable=True)
-    
+
     # Ollama Settings
     ollama_url = Column(String, default="http://localhost:11434")
     ollama_model = Column(String, nullable=True)
-    
+
     # Processing Settings
     update_title = Column(Boolean, default=True)
     update_correspondent = Column(Boolean, default=True)
@@ -70,11 +72,11 @@ class DocumentChangeLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, index=True, nullable=False)
     changed_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Store JSON strings for what was changed
     original_state = Column(JSON, nullable=True) # {title, tags, correspondent, document_type}
     new_state = Column(JSON, nullable=True)      # {title, tags, correspondent, document_type}
-    
+
     # Metadata about the AI decision
     prompt_used = Column(Text, nullable=True)
     ai_response = Column(Text, nullable=True)
