@@ -42,6 +42,7 @@ def mock_settings():
     settings.update_title = True
     settings.update_tags = True
     settings.update_correspondent = True
+    settings.update_creation_date = True
     settings.remove_query_tag = True
     settings.query_tag_id = 1
     settings.force_process_tag_id = None
@@ -88,14 +89,16 @@ async def test_process_document_success(processor, mocker):
         "title": "Scan 123",
         "tags": [1],
         "correspondent": None,
-        "document_type": None
+        "document_type": None,
+        "created": "2023-01-01"
     }
 
     processor.ollama.generate_completion.return_value = '''```json
     {
         "title": "Apple Receipt",
         "correspondent_id": 1,
-        "tag_ids": [2]
+        "tag_ids": [2],
+        "created": "2023-01-02"
     }
     ```'''
 
@@ -106,7 +109,8 @@ async def test_process_document_success(processor, mocker):
         title="Apple Receipt",
         tags=[2],
         correspondent_id=1,
-        document_type_id=None
+        document_type_id=None,
+        created="2023-01-02"
     )
 
     assert processor.db.add_called_count == 2
@@ -127,10 +131,11 @@ async def test_process_document_force_tag_removal(processor, mock_settings):
         "title": "Scan 123",
         "tags": [99],
         "correspondent": None,
-        "document_type": None
+        "document_type": None,
+        "created": "2023-01-01"
     }
 
-    processor.ollama.generate_completion.return_value = '{"title": "Test Doc", "tag_ids": []}'
+    processor.ollama.generate_completion.return_value = '{"title": "Test Doc", "tag_ids": [], "created": "2023-01-02"}'
 
     await processor.process_document(100)
 
@@ -139,5 +144,6 @@ async def test_process_document_force_tag_removal(processor, mock_settings):
         title="Test Doc",
         tags=[],
         correspondent_id=None,
-        document_type_id=None
+        document_type_id=None,
+        created="2023-01-02"
     )

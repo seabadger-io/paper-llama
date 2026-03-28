@@ -31,6 +31,7 @@ class SettingsUpdate(BaseModel):
     update_correspondent: bool = True
     update_document_type: bool = True
     update_tags: bool = True
+    update_creation_date: bool = False
     document_word_limit: int = 1500
     schedule_interval_minutes: int = 0
     remove_query_tag: bool = True
@@ -94,6 +95,7 @@ async def get_current_settings(
         update_correspondent=settings.update_correspondent,
         update_document_type=settings.update_document_type,
         update_tags=settings.update_tags,
+        update_creation_date=settings.update_creation_date if settings.update_creation_date is not None else False,
         document_word_limit=settings.document_word_limit,
         schedule_interval_minutes=settings.schedule_interval_minutes,
         remove_query_tag=settings.remove_query_tag,
@@ -123,6 +125,7 @@ async def update_settings(
     settings.update_correspondent = settings_data.update_correspondent
     settings.update_document_type = settings_data.update_document_type
     settings.update_tags = settings_data.update_tags
+    settings.update_creation_date = settings_data.update_creation_date
     settings.document_word_limit = settings_data.document_word_limit
     settings.schedule_interval_minutes = settings_data.schedule_interval_minutes
     settings.remove_query_tag = settings_data.remove_query_tag

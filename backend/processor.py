@@ -62,6 +62,8 @@ class DocumentProcessor:
             prompt_parts.append("* Select maximum 5 tag IDs that best describe the document. Only select tags if they are actually relevant to the document. Don't select tags just because they are available or because they are in the document. Select tags that can be used to identify and categorize the document. For example, an employment contract should not be tagged as pension even if pension is mentioned in the document.")
         if self.settings.update_title:
             prompt_parts.append("* Extract a short, concise title for the document based on its contents.")
+        if self.settings.update_creation_date:
+            prompt_parts.append("* Try to identify the document creation date. If unsure, return null.")
 
         prompt_parts.append("\nEXPECTED JSON FORMAT:")
 
@@ -74,6 +76,8 @@ class DocumentProcessor:
             json_format["document_type_id"] = 45
         if self.settings.update_tags:
             json_format["tag_ids"] = [1, 2, 3]
+        if self.settings.update_creation_date:
+            json_format["created"] = "yyyy-mm-dd"
 
         prompt_parts.append(json.dumps(json_format, indent=4))
 
@@ -161,7 +165,8 @@ class DocumentProcessor:
             "title": doc.get("title"),
             "tags": doc.get("tags", []),
             "correspondent": doc.get("correspondent"),
-            "document_type": doc.get("document_type")
+            "document_type": doc.get("document_type"),
+            "created": doc.get("created")
         }
 
         new_corr_id = (
@@ -210,6 +215,12 @@ class DocumentProcessor:
         else:
             new_state["title"] = original_state["title"]
 
+        if self.settings.update_creation_date and ai_data.get("created"):
+            update_kwargs["created"] = ai_data.get("created")
+            new_state["created"] = ai_data.get("created")
+        else:
+            new_state["created"] = original_state.get("created")
+
         # 4. Update Paperless
         try:
             await self.paperless.update_document(
@@ -234,7 +245,8 @@ class DocumentProcessor:
                 "title": original_state.get("title"),
                 "correspondent": _resolve_id(correspondents, original_state.get("correspondent")),
                 "document_type": _resolve_id(document_types, original_state.get("document_type")),
-                "tags": _resolve_ids(tags, original_state.get("tags"))
+                "tags": _resolve_ids(tags, original_state.get("tags")),
+                "created": original_state.get("created")
             }
 
             log_new = {
@@ -242,6 +254,7 @@ class DocumentProcessor:
                 "correspondent": _resolve_id(correspondents, new_state.get("correspondent")),
                 "document_type": _resolve_id(document_types, new_state.get("document_type")),
                 "tags": _resolve_ids(tags, new_state.get("tags")),
+                "created": new_state.get("created"),
                 "ai_processing_time_ms": ai_processing_time_ms
             }
 

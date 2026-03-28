@@ -46,6 +46,7 @@ export default {
                                                 <div class="truncate" :title="log.original_state?.title"><strong>Title:</strong> {{ log.original_state?.title || 'None' }}</div>
                                                 <div class="truncate" :title="log.original_state?.correspondent"><strong>Corr:</strong> {{ log.original_state?.correspondent || 'None' }}</div>
                                                 <div class="truncate" :title="log.original_state?.document_type"><strong>Type:</strong> {{ log.original_state?.document_type || 'None' }}</div>
+                                                <div class="truncate" :title="log.original_state?.created"><strong>Date:</strong> {{ log.original_state?.created || 'None' }}</div>
                                                 <div class="mt-1 line-clamp-2" :title="(log.original_state?.tags || []).join(', ')"><strong>Tags:</strong> {{ (log.original_state?.tags || []).join(', ') || 'None' }}</div>
                                             </div>
                                             <div class="min-w-0">
@@ -53,6 +54,7 @@ export default {
                                                 <div class="truncate" :title="log.new_state?.title"><strong>Title:</strong> {{ log.new_state?.title || 'None' }}</div>
                                                 <div class="truncate" :title="log.new_state?.correspondent"><strong>Corr:</strong> {{ log.new_state?.correspondent || 'None' }}</div>
                                                 <div class="truncate" :title="log.new_state?.document_type"><strong>Type:</strong> {{ log.new_state?.document_type || 'None' }}</div>
+                                                <div class="truncate" :title="log.new_state?.created"><strong>Date:</strong> {{ log.new_state?.created || 'None' }}</div>
                                                 <div class="mt-1 line-clamp-2" :title="(log.new_state?.tags || []).join(', ')"><strong>Tags:</strong> {{ (log.new_state?.tags || []).join(', ') || 'None' }}</div>
                                                 <div v-if="log.new_state?.ai_processing_time_ms != null" class="mt-1 text-xs text-indigo-500 font-medium whitespace-nowrap"><strong>AI Time:</strong> {{ (log.new_state.ai_processing_time_ms / 1000).toFixed(1) }}s</div>
                                             </div>
@@ -118,6 +120,10 @@ export default {
                             <div class="flex items-center mt-2">
                                 <input id="set_update_tags" type="checkbox" v-model="settings.update_tags" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                                 <label for="set_update_tags" class="ml-2 block text-sm text-gray-900">Update Tags</label>
+                            </div>
+                            <div class="flex items-center mt-2">
+                                <input id="set_update_created" type="checkbox" v-model="settings.update_creation_date" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="set_update_created" class="ml-2 block text-sm text-gray-900">Update Creation Date</label>
                             </div>
                         </div>
                         <div>

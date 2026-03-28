@@ -31,6 +31,7 @@ class SetupWizardRequest(BaseModel):
     update_correspondent: bool = True
     update_document_type: bool = True
     update_tags: bool = True
+    update_creation_date: bool = False
     document_word_limit: int = 1500
     schedule_interval_minutes: int
     remove_query_tag: bool = True
@@ -65,6 +66,7 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         update_correspondent=request.update_correspondent,
         update_document_type=request.update_document_type,
         update_tags=request.update_tags,
+        update_creation_date=request.update_creation_date,
         document_word_limit=request.document_word_limit,
         schedule_interval_minutes=request.schedule_interval_minutes,
         remove_query_tag=request.remove_query_tag,

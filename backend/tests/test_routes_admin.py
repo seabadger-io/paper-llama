@@ -51,6 +51,7 @@ async def test_get_current_settings():
         update_correspondent=True,
         update_document_type=True,
         update_tags=True,
+        update_creation_date=True,
         document_word_limit=1500,
         schedule_interval_minutes=15,
         remove_query_tag=True,
@@ -62,6 +63,27 @@ async def test_get_current_settings():
     result = await get_current_settings(db=mock_db, current_user=mock_user)
     assert result.paperless_url == "http://test"
     assert result.remove_query_tag is True
+    assert result.update_creation_date is True
+
+@pytest.mark.asyncio
+async def test_get_current_settings_handles_none_for_creation_date():
+    mock_user = AdminUser(username="test")
+    # Simulate existing DB row where the new column is NULL
+    mock_settings = AppSettings(
+        update_creation_date=None,
+        update_title=True,
+        update_correspondent=True,
+        update_document_type=True,
+        update_tags=True,
+        remove_query_tag=True,
+        document_word_limit=1500,
+        schedule_interval_minutes=0,
+        ollama_url="http://ollama"
+    )
+    mock_db = MockDB(mock_settings)
+
+    result = await get_current_settings(db=mock_db, current_user=mock_user)
+    assert result.update_creation_date is False
 
 @pytest.mark.asyncio
 async def test_update_settings(mocker):

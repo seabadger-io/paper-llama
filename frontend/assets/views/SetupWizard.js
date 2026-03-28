@@ -90,6 +90,10 @@ export default {
                                 <input id="wiz_update_tags" type="checkbox" v-model="form.update_tags" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                                 <label for="wiz_update_tags" class="ml-2 block text-sm text-gray-900">Update Tags</label>
                             </div>
+                            <div class="flex items-center mt-2">
+                                <input id="wiz_update_created" type="checkbox" v-model="form.update_creation_date" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="wiz_update_created" class="ml-2 block text-sm text-gray-900">Update Creation Date</label>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Custom Instructions</label>
@@ -151,6 +155,7 @@ export default {
                 update_correspondent: true,
                 update_document_type: true,
                 update_tags: true,
+                update_creation_date: false,
                 custom_prompt: '',
                 document_word_limit: 1500,
                 schedule_interval_minutes: 5,
