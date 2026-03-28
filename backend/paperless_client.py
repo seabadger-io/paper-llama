@@ -75,7 +75,8 @@ class PaperlessClient:
         title: str | None = None,
         correspondent_id: int | None = None,
         document_type_id: int | None = None,
-        tags: list[int] | None = None
+        tags: list[int] | None = None,
+        created: str | None = None
     ) -> dict:
         update_data = {}
         if title is not None:
@@ -86,6 +87,8 @@ class PaperlessClient:
             update_data["document_type"] = document_type_id
         if tags is not None:
             update_data["tags"] = tags
+        if created is not None:
+            update_data["created"] = created
 
         if not update_data:
             return {}
