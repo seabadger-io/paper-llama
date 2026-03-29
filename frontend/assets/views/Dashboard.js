@@ -40,7 +40,7 @@ export default {
                         <ul class="divide-y divide-blue-200 border border-blue-200 rounded-md bg-blue-50">
                             <li v-for="doc in processingDocs" :key="doc.document_id" class="px-4 py-3 flex justify-between items-center">
                                 <span class="text-sm font-medium text-blue-900">Document ID: {{ doc.document_id }}</span>
-                                <span class="text-xs text-blue-700">Started: {{ new Date(doc.started_at).toLocaleString() }}</span>
+                                <span class="text-xs text-blue-700">Started: {{ formatDate(doc.started_at) }}</span>
                             </li>
                         </ul>
                     </div>
@@ -56,7 +56,7 @@ export default {
                                             {{ log.original_state?.title || 'Document ' + log.document_id }}
                                             <span class="text-[10px] font-normal text-gray-400 ml-2">#{{ log.document_id }}</span>
                                         </h3>
-                                        <p class="text-xs text-gray-500 font-medium">{{ new Date(log.changed_at).toLocaleString() }}</p>
+                                        <p class="text-xs text-gray-500 font-medium">{{ formatDate(log.changed_at) }}</p>
                                     </div>
                                     <div class="text-sm text-gray-500 flex flex-col space-y-1">
                                         <!-- Success State: Before/After Grid -->
@@ -218,7 +218,20 @@ export default {
     </div>`,
     components: { LoadingSpinner },
     data() {
-        return { tab: 'logs', logs: [], processingDocs: [], settings: {}, availableModels: [], availableTags: [], loading: true, error: '', message: '', paperlessStatus: '', logInterval: null }
+        return { 
+            tab: 'logs', 
+            logs: [], 
+            processingDocs: [], 
+            settings: {}, 
+            serverTimezone: 'UTC',
+            availableModels: [], 
+            availableTags: [], 
+            loading: true, 
+            error: '', 
+            message: '', 
+            paperlessStatus: '', 
+            logInterval: null 
+        }
     },
     async mounted() {
         await this.loadData();
@@ -260,6 +273,7 @@ export default {
                 this.logs = logData;
                 this.processingDocs = processingData;
                 this.settings = settingData;
+                this.serverTimezone = settingData.server_timezone || 'UTC';
                 await this.fetchModels(false);
                 if (this.settings.paperless_url && this.settings.paperless_token) {
                     await this.testPaperless(true);
@@ -336,6 +350,30 @@ export default {
         logout() {
             localStorage.removeItem('token');
             this.$router.push('/login');
+        },
+        formatDate(dateStr) {
+            if (!dateStr) return 'None';
+            try {
+                // Ensure naive UTC strings (without 'Z' or '+') are interpreted as UTC
+                const normalizedStr = (typeof dateStr === 'string' && !dateStr.includes('Z') && !dateStr.includes('+')) 
+                    ? dateStr + 'Z' 
+                    : dateStr;
+                    
+                const date = new Date(normalizedStr);
+                // sv-SE locale uses YYYY-MM-DD HH:mm:ss format
+                return new Intl.DateTimeFormat('sv-SE', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false,
+                    timeZone: this.serverTimezone
+                }).format(date);
+            } catch (e) {
+                return new Date(dateStr).toLocaleString();
+            }
         }
     }
 };

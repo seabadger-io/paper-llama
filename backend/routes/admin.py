@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -40,6 +41,7 @@ class SettingsUpdate(BaseModel):
     query_tag_id: int | None = None
     force_process_tag_id: int | None = None
     custom_prompt: str | None = None
+    server_timezone: str = "UTC"
 
 class SetupStatus(BaseModel):
     is_setup: bool
@@ -105,7 +107,8 @@ async def get_current_settings(
         remove_query_tag=settings.remove_query_tag,
         query_tag_id=settings.query_tag_id,
         force_process_tag_id=settings.force_process_tag_id,
-        custom_prompt=settings.custom_prompt
+        custom_prompt=settings.custom_prompt,
+        server_timezone=os.environ.get("TZ", "UTC")
     )
 
 @router.put("/settings")
