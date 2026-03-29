@@ -52,11 +52,15 @@ export default {
                             <div class="flex space-x-3">
                                 <div class="flex-1 space-y-1">
                                     <div class="flex items-center justify-between">
-                                        <h3 class="text-sm font-medium text-gray-900">Document ID: {{ log.document_id }}</h3>
-                                        <p class="text-sm text-gray-500">{{ new Date(log.changed_at).toLocaleString() }}</p>
+                                        <h3 class="text-sm font-semibold text-gray-900">
+                                            {{ log.original_state?.title || 'Document ' + log.document_id }}
+                                            <span class="text-[10px] font-normal text-gray-400 ml-2">#{{ log.document_id }}</span>
+                                        </h3>
+                                        <p class="text-xs text-gray-500 font-medium">{{ new Date(log.changed_at).toLocaleString() }}</p>
                                     </div>
                                     <div class="text-sm text-gray-500 flex flex-col space-y-1">
-                                        <div class="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded mt-2 text-xs sm:text-sm">
+                                        <!-- Success State: Before/After Grid -->
+                                        <div v-if="!log.new_state?.error" class="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded mt-2 text-xs sm:text-sm border-l-4 border-blue-400">
                                             <div class="min-w-0">
                                                 <div class="font-semibold text-[10px] uppercase text-gray-400 mb-1">Before</div>
                                                 <div class="truncate" :title="log.original_state?.title"><strong>Title:</strong> {{ log.original_state?.title || 'None' }}</div>
@@ -75,6 +79,21 @@ export default {
                                                 <div v-if="log.new_state?.ai_processing_time_ms != null" class="mt-1 text-xs text-indigo-500 font-medium whitespace-nowrap"><strong>AI Time:</strong> {{ (log.new_state.ai_processing_time_ms / 1000).toFixed(1) }}s</div>
                                             </div>
                                         </div>
+
+                                        <!-- Error State: Specialized Error Card -->
+                                        <div v-else class="bg-red-50 p-3 rounded mt-2 text-xs sm:text-sm border-l-4 border-red-500">
+                                            <div class="font-semibold text-[10px] uppercase text-red-600 mb-2 flex items-center">
+                                                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                                Processing Failed
+                                            </div>
+                                            <div class="bg-white/50 p-2 rounded border border-red-100 font-mono text-red-700 break-words mb-2">
+                                                {{ log.new_state.error }}
+                                            </div>
+                                            <div class="flex items-center justify-between text-[10px] text-gray-500 font-medium">
+                                                <span>Total Attempts: {{ log.new_state.attempts }}</span>
+                                                <span class="bg-red-100 text-red-700 px-1.5 py-0.5 rounded uppercase">Retry Limit Reached</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -86,12 +105,6 @@ export default {
                 <div v-if="tab === 'settings'" class="bg-white shadow sm:rounded-md p-6 max-w-2xl">
                     <h2 class="text-lg leading-6 font-medium text-gray-900 mb-4">Application Settings</h2>
                     <form @submit.prevent="saveSettings" class="space-y-4">
-                        <div v-if="message" class="bg-green-50 text-green-700 p-3 rounded-md text-sm border border-green-200 flex justify-between">
-                            {{ message }}
-                            <button type="button" @click="message=''">x</button>
-                        </div>
-                        <div v-if="error" class="bg-red-50 text-red-500 p-3 rounded-md text-sm">{{ error }}</div>
-
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Paperless URL</label>
                             <input v-model="settings.paperless_url" required class="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
@@ -123,6 +136,11 @@ export default {
                             <label class="block text-sm font-medium text-gray-700">API Timeout (seconds)</label>
                             <p class="text-xs text-gray-500 mb-1">Maximum time to wait for the AI to respond.</p>
                             <input type="number" v-model="settings.ollama_timeout" required min="30" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Max Retries</label>
+                            <p class="text-xs text-gray-500 mb-1">Number of retries per processing cycle if the AI query or saving the document fails.</p>
+                            <input type="number" v-model="settings.max_retries" required min="1" max="10" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
                         </div>
                         <div>
                             <span class="block text-sm font-medium text-gray-700 mb-2">AI Capabilities</span>
@@ -181,6 +199,12 @@ export default {
                                 <option v-for="t in availableTags" :key="t.id" :value="t.id">{{ t.name }}</option>
                             </select>
                         </div>
+
+                        <div v-if="message" class="bg-green-50 text-green-700 p-3 rounded-md text-sm border border-green-200 flex justify-between">
+                            {{ message }}
+                            <button type="button" @click="message=''">x</button>
+                        </div>
+                        <div v-if="error" class="bg-red-50 text-red-500 p-3 rounded-md text-sm">{{ error }}</div>
 
                         <div>
                             <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
@@ -259,7 +283,7 @@ export default {
                     paperless_token: this.settings.paperless_token
                 });
                 this.availableTags = res.tags || [];
-                
+
                 let tagsMissing = false;
                 if (this.settings.query_tag_id && !this.availableTags.some(t => t.id === this.settings.query_tag_id)) {
                     tagsMissing = true;
@@ -269,11 +293,11 @@ export default {
                     tagsMissing = true;
                     this.settings.force_process_tag_id = null;
                 }
-                
+
                 if (!silent) {
                     this.paperlessStatus = `Connection successful! Found ${res.tags_count} tags.`;
                 }
-                
+
                 if (tagsMissing) {
                     this.error = "Warning: One or more configured tags no longer exist in Paperless. Please update your settings.";
                 }

@@ -83,7 +83,8 @@ describe('Dashboard Component', () => {
         
         const wrapper = await createWrapper()
         
-        expect(wrapper.text()).toContain('Document ID: 100')
+        expect(wrapper.text()).toContain('Invoice')
+        expect(wrapper.text()).toContain('#100')
         expect(wrapper.text()).toContain('Processed Invoice')
         expect(wrapper.text()).toContain('1.5s') // ai_processing_time_ms properly formatted
     })

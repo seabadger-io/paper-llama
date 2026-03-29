@@ -50,6 +50,8 @@ to create a dedicated user in Paperless with the following permissions:
 - **AI Capabilities Checkboxes:** Choose exactly which fields the AI assistant is allowed to modify.
   Currently available: Title, Correspondent, Document Type, Tags and Creation Date.
 - **API Timeout:** The maximum time to wait for the AI to respond (in seconds).
+- **Max Retries:** The maximum number of retries per processing cycle if the AI query or saving the document fails. Applies to each separately. If a document processing fails even after the retries, it will
+be tried again at the end of the next processing cycle, after processing the newly added documents.
 - **Document Word Limit:** The maximum number of words to pass to the LLM (0 for unlimited). Helps speed up processing on very large documents.
 - **Schedule Interval:** How often (in minutes) the app polls Paperless-ngx for unprocessed documents. Set to `0` to disable background polling. When disabled, you can manually trigger processing from the Dashboard
 or configure a webhook in Paperless to trigger processing when a new document is added. The contents passed

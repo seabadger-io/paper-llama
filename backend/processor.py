@@ -1,7 +1,8 @@
+import asyncio
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -127,162 +128,178 @@ class DocumentProcessor:
         # Mark as processing right away
         await self._mark_processed(document_id, "processing")
 
-        # 1. Fetch document and metadata
-        try:
-            doc = await self.paperless.get_document(document_id)
-            doc_content = doc.get("content", "")
-
-            tags, correspondents, document_types = await self.get_cached_metadata()
-
-        except Exception as e:
-            logger.error(f"Failed to fetch data from Paperless for doc {document_id}: {e}")
-            await self._mark_processed(document_id, "error", str(e))
-            return
-
-        # 2. Query Ollama
-        prompt_tags = [t for t in tags if t['id'] not in (self.settings.query_tag_id, self.settings.force_process_tag_id)]
-        prompt = await self._build_prompt(doc_content, prompt_tags, correspondents, document_types)
-        system_prompt = "You are a document classification AI. You output valid JSON only."
-
+        max_retries = self.settings.max_retries if self.settings.max_retries is not None else 3
+        ai_response_text = None
+        prompt = None
         ai_processing_time_ms = 0
-        try:
-            start_time = time.perf_counter()
-            ai_response_text = await self.ollama.generate_completion(
-                model=self.settings.ollama_model,
-                prompt=prompt,
-                system=system_prompt
-            )
-            ai_processing_time_ms = int((time.perf_counter() - start_time) * 1000)
-            # Find JSON block if Ollama adds markdown
-            if "```json" in ai_response_text:
-                json_str = ai_response_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in ai_response_text:
-                json_str = ai_response_text.split("```")[1].split("```")[0].strip()
-            else:
-                json_str = ai_response_text.strip()
+        original_state = {}
+        new_state = {}
+        update_kwargs = {}
 
-            ai_data = json.loads(json_str)
-        except Exception as e:
-            logger.error(f"Failed to parse Ollama response for doc {document_id}. Response: {ai_response_text[:100]}... Error: {e}")
-            await self._mark_processed(document_id, "error", f"AI Parsing logic error: {e}")
-            return
+        for attempt in range(max_retries):
+            try:
+                # 1. Fetch document and metadata if we haven't already
+                if not ai_response_text:
+                    doc = await self.paperless.get_document(document_id)
+                    doc_content = doc.get("content", "")
 
-        # 3. Figure out updates
-        original_state = {
-            "title": doc.get("title"),
-            "tags": doc.get("tags", []),
-            "correspondent": doc.get("correspondent"),
-            "document_type": doc.get("document_type"),
-            "created": doc.get("created")
-        }
+                    tags, correspondents, document_types = await self.get_cached_metadata()
 
-        new_corr_id = (
-            ai_data.get("correspondent_id")
-            if self.settings.update_correspondent and "correspondent_id" in ai_data
-            else original_state["correspondent"]
-        )
-        new_dtype_id = (
-            ai_data.get("document_type_id")
-            if self.settings.update_document_type and "document_type_id" in ai_data
-            else original_state["document_type"]
-        )
-        new_tag_ids = ai_data.get("tag_ids", []) if self.settings.update_tags else []
+                    # 2. Query Ollama
+                    prompt_tags = [t for t in tags if t['id'] not in (self.settings.query_tag_id, self.settings.force_process_tag_id)]
+                    prompt = await self._build_prompt(doc_content, prompt_tags, correspondents, document_types)
+                    system_prompt = "You are a document classification AI. You output valid JSON only."
 
-        # Remove trigger tags if configured
-        remove_tag_ids = []
-        if self.settings.remove_query_tag and self.settings.query_tag_id:
-            remove_tag_ids.append(self.settings.query_tag_id)
+                    start_time = time.perf_counter()
+                    ai_response_text = await self.ollama.generate_completion(
+                        model=self.settings.ollama_model,
+                        prompt=prompt,
+                        system=system_prompt
+                    )
+                    ai_processing_time_ms = int((time.perf_counter() - start_time) * 1000)
 
-        if self.settings.force_process_tag_id:
-            remove_tag_ids.append(self.settings.force_process_tag_id)
+                    # Find JSON block if Ollama adds markdown
+                    if "```json" in ai_response_text:
+                        json_str = ai_response_text.split("```json")[1].split("```")[0].strip()
+                    elif "```" in ai_response_text:
+                        json_str = ai_response_text.split("```")[1].split("```")[0].strip()
+                    else:
+                        json_str = ai_response_text.strip()
 
-        existing_tags = original_state["tags"]
-        merged_tags = list(set(existing_tags) | set(new_tag_ids))
+                    ai_data = json.loads(json_str)
 
-        if remove_tag_ids:
-            final_tags = [tid for tid in merged_tags if tid not in remove_tag_ids]
-        else:
-            final_tags = merged_tags
+                    # 3. Figure out updates
+                    original_state = {
+                        "title": doc.get("title"),
+                        "tags": doc.get("tags", []),
+                        "correspondent": doc.get("correspondent"),
+                        "document_type": doc.get("document_type"),
+                        "created": doc.get("created")
+                    }
 
-        new_state = {
-            "tags": final_tags,
-            "correspondent": new_corr_id,
-            "document_type": new_dtype_id
-        }
+                    new_corr_id = (
+                        ai_data.get("correspondent_id")
+                        if self.settings.update_correspondent and "correspondent_id" in ai_data
+                        else original_state["correspondent"]
+                    )
+                    new_dtype_id = (
+                        ai_data.get("document_type_id")
+                        if self.settings.update_document_type and "document_type_id" in ai_data
+                        else original_state["document_type"]
+                    )
+                    new_tag_ids = ai_data.get("tag_ids", []) if self.settings.update_tags else []
 
-        update_kwargs = {
-            "correspondent_id": new_corr_id,
-            "document_type_id": new_dtype_id,
-            "tags": final_tags
-        }
+                    # Remove trigger tags if configured
+                    remove_tag_ids = []
+                    if self.settings.remove_query_tag and self.settings.query_tag_id:
+                        remove_tag_ids.append(self.settings.query_tag_id)
 
-        if self.settings.update_title and ai_data.get("title"):
-            update_kwargs["title"] = ai_data.get("title")
-            new_state["title"] = ai_data.get("title")
-        else:
-            new_state["title"] = original_state["title"]
+                    if self.settings.force_process_tag_id:
+                        remove_tag_ids.append(self.settings.force_process_tag_id)
 
-        if self.settings.update_creation_date and ai_data.get("created"):
-            update_kwargs["created"] = ai_data.get("created")
-            new_state["created"] = ai_data.get("created")
-        else:
-            new_state["created"] = original_state.get("created")
+                    existing_tags = original_state["tags"]
+                    merged_tags = list(set(existing_tags) | set(new_tag_ids))
 
-        # 4. Update Paperless
-        try:
-            await self.paperless.update_document(
-                document_id,
-                **update_kwargs
-            )
+                    if remove_tag_ids:
+                        final_tags = [tid for tid in merged_tags if tid not in remove_tag_ids]
+                    else:
+                        final_tags = merged_tags
 
-            def _resolve_id(items, item_id):
-                if item_id is None:
-                    return None
-                for i in items:
-                    if i.get("id") == item_id:
-                        return f"{i.get('id')} ({i.get('name')})"
-                return str(item_id)
+                    new_state = {
+                        "tags": final_tags,
+                        "correspondent": new_corr_id,
+                        "document_type": new_dtype_id
+                    }
 
-            def _resolve_ids(items, id_list):
-                if not id_list:
-                    return []
-                return [_resolve_id(items, i) for i in id_list]
+                    update_kwargs = {
+                        "correspondent_id": new_corr_id,
+                        "document_type_id": new_dtype_id,
+                        "tags": final_tags
+                    }
 
-            log_original = {
-                "title": original_state.get("title"),
-                "correspondent": _resolve_id(correspondents, original_state.get("correspondent")),
-                "document_type": _resolve_id(document_types, original_state.get("document_type")),
-                "tags": _resolve_ids(tags, original_state.get("tags")),
-                "created": original_state.get("created")
-            }
+                    if self.settings.update_title and ai_data.get("title"):
+                        update_kwargs["title"] = ai_data.get("title")
+                        new_state["title"] = ai_data.get("title")
+                    else:
+                        new_state["title"] = original_state["title"]
 
-            log_new = {
-                "title": new_state.get("title"),
-                "correspondent": _resolve_id(correspondents, new_state.get("correspondent")),
-                "document_type": _resolve_id(document_types, new_state.get("document_type")),
-                "tags": _resolve_ids(tags, new_state.get("tags")),
-                "created": new_state.get("created"),
-                "ai_processing_time_ms": ai_processing_time_ms
-            }
+                    if self.settings.update_creation_date and ai_data.get("created"):
+                        update_kwargs["created"] = ai_data.get("created")
+                        new_state["created"] = ai_data.get("created")
+                    else:
+                        new_state["created"] = original_state.get("created")
 
-            # Log changes
-            log_entry = DocumentChangeLog(
-                document_id=document_id,
-                original_state=log_original,
-                new_state=log_new,
-                prompt_used=prompt,
-                ai_response=ai_response_text
-            )
-            self.db.add(log_entry)
-            await self._mark_processed(document_id, "success")
-            await self.db.commit()
+                # 4. Update Paperless
+                await self.paperless.update_document(
+                    document_id,
+                    **update_kwargs
+                )
 
-            logger.info(f"Successfully processed document {document_id}")
+                def _resolve_id(items, item_id):
+                    if item_id is None:
+                        return None
+                    for i in items:
+                        if i.get("id") == item_id:
+                            return f"{i.get('id')} ({i.get('name')})"
+                    return str(item_id)
 
-        except Exception as e:
-            await self.db.rollback()
-            logger.error(f"Failed to apply updates to Paperless for doc {document_id}: {e}")
-            await self._mark_processed(document_id, "error", str(e))
+                def _resolve_ids(items, id_list):
+                    if not id_list:
+                        return []
+                    return [_resolve_id(items, i) for i in id_list]
+
+                log_original = {
+                    "title": original_state.get("title"),
+                    "correspondent": _resolve_id(correspondents, original_state.get("correspondent")),
+                    "document_type": _resolve_id(document_types, original_state.get("document_type")),
+                    "tags": _resolve_ids(tags, original_state.get("tags")),
+                    "created": original_state.get("created")
+                }
+
+                log_new = {
+                    "title": new_state.get("title"),
+                    "correspondent": _resolve_id(correspondents, new_state.get("correspondent")),
+                    "document_type": _resolve_id(document_types, new_state.get("document_type")),
+                    "tags": _resolve_ids(tags, new_state.get("tags")),
+                    "created": new_state.get("created"),
+                    "ai_processing_time_ms": ai_processing_time_ms
+                }
+
+                # Log changes
+                log_entry = DocumentChangeLog(
+                    document_id=document_id,
+                    original_state=log_original,
+                    new_state=log_new,
+                    prompt_used=prompt,
+                    ai_response=ai_response_text
+                )
+                self.db.add(log_entry)
+                await self._mark_processed(document_id, "success")
+                await self.db.commit()
+
+                logger.info(f"Successfully processed document {document_id}")
+                return
+
+            except Exception as e:
+                err_str = str(e) or type(e).__name__
+                logger.warning(f"Attempt {attempt + 1} failed for doc {document_id}: {err_str}")
+                if attempt == max_retries - 1:
+                    await self.db.rollback()
+                    logger.error(f"Failed all {max_retries} attempts for doc {document_id}: {err_str}")
+                    await self._mark_processed(document_id, "error", err_str)
+
+                    # Log failure to activity logs
+                    log_entry = DocumentChangeLog(
+                        document_id=document_id,
+                        original_state=log_original if 'log_original' in locals() else {"title": f"Document {document_id}"},
+                        new_state={"error": err_str, "attempts": max_retries},
+                        prompt_used=prompt if prompt else "",
+                        ai_response=ai_response_text if ai_response_text else ""
+                    )
+                    self.db.add(log_entry)
+                    await self.db.commit()
+                else:
+                    await asyncio.sleep(2)
 
     async def _mark_processed(self, document_id: int, status: str, error_message: str = None):
         """Records that a document has been processed to avoid loops."""
@@ -295,7 +312,7 @@ class DocumentProcessor:
             existing.error_message = error_message
             # Only update the timestamp if we're starting a new processing run
             if status == "processing":
-                existing.processed_at = datetime.utcnow()
+                existing.processed_at = datetime.now(UTC)
         else:
             new_record = ProcessedDocument(
                 document_id=document_id,

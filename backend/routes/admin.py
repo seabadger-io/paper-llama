@@ -28,6 +28,7 @@ class SettingsUpdate(BaseModel):
     ollama_url: str = "http://localhost:11434"
     ollama_model: str | None = None
     ollama_timeout: int = 300
+    max_retries: int = 3
     update_title: bool = True
     update_correspondent: bool = True
     update_document_type: bool = True
@@ -93,6 +94,7 @@ async def get_current_settings(
         ollama_url=settings.ollama_url,
         ollama_model=settings.ollama_model,
         ollama_timeout=settings.ollama_timeout if settings.ollama_timeout is not None else 300,
+        max_retries=settings.max_retries if settings.max_retries is not None else 3,
         update_title=settings.update_title,
         update_correspondent=settings.update_correspondent,
         update_document_type=settings.update_document_type,
@@ -124,6 +126,7 @@ async def update_settings(
     settings.ollama_url = settings_data.ollama_url
     settings.ollama_model = settings_data.ollama_model
     settings.ollama_timeout = settings_data.ollama_timeout
+    settings.max_retries = settings_data.max_retries
     settings.update_title = settings_data.update_title
     settings.update_correspondent = settings_data.update_correspondent
     settings.update_document_type = settings_data.update_document_type

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import bcrypt
 from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
@@ -45,6 +45,7 @@ class AppSettings(Base):
     ollama_timeout = Column(Integer, default=300)
 
     # Processing Settings
+    max_retries = Column(Integer, default=3)
     update_title = Column(Boolean, default=True)
     update_correspondent = Column(Boolean, default=True)
     update_document_type = Column(Boolean, default=True)
@@ -63,7 +64,7 @@ class ProcessedDocument(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, unique=True, index=True, nullable=False)
-    processed_at = Column(DateTime, default=datetime.utcnow)
+    processed_at = Column(DateTime, default=lambda: datetime.now(UTC))
     status = Column(String, default="success") # success, error, skipped
     error_message = Column(Text, nullable=True)
 
@@ -73,7 +74,7 @@ class DocumentChangeLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     document_id = Column(Integer, index=True, nullable=False)
-    changed_at = Column(DateTime, default=datetime.utcnow)
+    changed_at = Column(DateTime, default=lambda: datetime.now(UTC))
 
     # Store JSON strings for what was changed
     original_state = Column(JSON, nullable=True) # {title, tags, correspondent, document_type}

@@ -148,3 +148,34 @@ async def test_process_document_force_tag_removal(processor, mock_settings):
         document_type_id=None,
         created="2023-01-02"
     )
+
+@pytest.mark.asyncio
+async def test_process_document_retry_error(processor, mock_settings, mocker):
+    mock_settings.max_retries = 2
+
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = [{"id": 1, "name": "inbox"}]
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+
+    processor.paperless.get_document.return_value = {
+        "id": 100,
+        "content": "Invoice",
+        "title": "Scan 123",
+        "tags": [1],
+        "correspondent": None,
+        "document_type": None,
+        "created": "2023-01-01"
+    }
+
+    # Force completion logic error
+    processor.ollama.generate_completion.side_effect = Exception("Ollama disconnected")
+    mock_sleep = mocker.patch("backend.processor.asyncio.sleep", new_callable=AsyncMock)
+
+    await processor.process_document(100)
+
+    # Asserts
+    assert processor.ollama.generate_completion.call_count == 2
+    mock_sleep.assert_called_once_with(2)
+    assert processor.db.add_called_count == 3 # 1 processing log, 1 error lock log, 1 changelog max_retries
+    assert processor.db.rollback_called_count == 1

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -10,9 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.future import select
 
 from .database import AsyncSessionLocal, init_engine
-from .models import AppSettings
+from .models import AppSettings, ProcessedDocument
 from .routes import admin, webhook, wizard
-from .scheduler import start_scheduler, update_scheduler
+from .scheduler import start_scheduler, trigger_workflow, update_scheduler
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -29,11 +30,25 @@ async def lifespan(app: FastAPI):
 
     # Initialize scheduler interval from DB if set
     async with AsyncSessionLocal() as session:
+        # Cleanup any stuck processing states from previous crashes
+        from sqlalchemy import update
+        await session.execute(
+            update(ProcessedDocument)
+            .where(ProcessedDocument.status == 'processing')
+            .values(status='error', error_message='Interrupted by application restart')
+        )
+        await session.commit()
+
         query = select(AppSettings).limit(1)
         result = await session.execute(query)
         settings = result.scalar_one_or_none()
         if settings and settings.schedule_interval_minutes > 0:
             update_scheduler(settings.schedule_interval_minutes)
+        if settings:
+            # If the wizard has been run already, trigger a processing cycle on startup to catch any documents that were added while the app was down and documents that were
+            # stuck in processing state / documents that were not processed while the app was down.
+            logger.info("Triggering initial processing cycle in background...")
+            asyncio.create_task(trigger_workflow())
 
     yield
     # Shutdown

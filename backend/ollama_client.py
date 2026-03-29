@@ -40,5 +40,6 @@ class OllamaClient:
                 data = response.json()
                 return data.get("response", "")
             except Exception as e:
-                logger.error(f"Failed to generate Ollama completion: {e}")
-                raise
+                err_msg = str(e) or type(e).__name__
+                logger.error(f"Failed to generate Ollama completion: {err_msg}")
+                raise Exception(err_msg) from e
