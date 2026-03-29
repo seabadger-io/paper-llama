@@ -104,6 +104,11 @@ export default {
                             <input v-model="settings.ollama_model" required class="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
                         </div>
                         <div>
+                            <label class="block text-sm font-medium text-gray-700">API Timeout (seconds)</label>
+                            <p class="text-xs text-gray-500 mb-1">Maximum time to wait for the AI to respond.</p>
+                            <input type="number" v-model="settings.ollama_timeout" required min="30" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
+                        </div>
+                        <div>
                             <span class="block text-sm font-medium text-gray-700 mb-2">AI Capabilities</span>
                             <div class="flex items-center mt-2">
                                 <input id="set_update_title" type="checkbox" v-model="settings.update_title" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">

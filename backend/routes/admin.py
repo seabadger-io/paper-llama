@@ -27,6 +27,7 @@ class SettingsUpdate(BaseModel):
     paperless_token: str | None = None
     ollama_url: str = "http://localhost:11434"
     ollama_model: str | None = None
+    ollama_timeout: int = 300
     update_title: bool = True
     update_correspondent: bool = True
     update_document_type: bool = True
@@ -91,6 +92,7 @@ async def get_current_settings(
         paperless_token=settings.paperless_token,
         ollama_url=settings.ollama_url,
         ollama_model=settings.ollama_model,
+        ollama_timeout=settings.ollama_timeout if settings.ollama_timeout is not None else 300,
         update_title=settings.update_title,
         update_correspondent=settings.update_correspondent,
         update_document_type=settings.update_document_type,
@@ -121,6 +123,7 @@ async def update_settings(
     settings.paperless_token = settings_data.paperless_token
     settings.ollama_url = settings_data.ollama_url
     settings.ollama_model = settings_data.ollama_model
+    settings.ollama_timeout = settings_data.ollama_timeout
     settings.update_title = settings_data.update_title
     settings.update_correspondent = settings_data.update_correspondent
     settings.update_document_type = settings_data.update_document_type

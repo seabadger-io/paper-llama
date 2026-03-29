@@ -26,7 +26,10 @@ class DocumentProcessor:
             base_url=settings.paperless_url,
             token=settings.paperless_token
         )
-        self.ollama = OllamaClient(base_url=settings.ollama_url)
+        self.ollama = OllamaClient(
+            base_url=settings.ollama_url,
+            timeout=float(settings.ollama_timeout) if settings.ollama_timeout else 300.0
+        )
 
     async def _build_prompt(
         self,

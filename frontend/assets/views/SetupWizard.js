@@ -57,6 +57,11 @@ export default {
                             <label class="block text-sm font-medium text-gray-700">Ollama API URL (e.g. http://localhost:11434)</label>
                             <input v-model="form.ollama_url" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                         </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">API Timeout (seconds)</label>
+                            <p class="text-xs text-gray-500 mb-1">Maximum time to wait for the AI to respond.</p>
+                            <input type="number" v-model="form.ollama_timeout" required min="30" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
                         <button type="button" @click="fetchModels" class="w-full justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Test & Fetch Models</button>
                         
                         <div v-if="availableModels.length > 0">
@@ -151,6 +156,7 @@ export default {
                 paperless_token: '',
                 ollama_url: 'http://localhost:11434',
                 ollama_model: '',
+                ollama_timeout: 300,
                 update_title: true,
                 update_correspondent: true,
                 update_document_type: true,

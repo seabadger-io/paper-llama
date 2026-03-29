@@ -27,6 +27,7 @@ class SetupWizardRequest(BaseModel):
     paperless_token: str
     ollama_url: str
     ollama_model: str
+    ollama_timeout: int = 300
     update_title: bool = True
     update_correspondent: bool = True
     update_document_type: bool = True
@@ -62,6 +63,7 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         paperless_token=request.paperless_token,
         ollama_url=request.ollama_url,
         ollama_model=request.ollama_model,
+        ollama_timeout=request.ollama_timeout,
         update_title=request.update_title,
         update_correspondent=request.update_correspondent,
         update_document_type=request.update_document_type,

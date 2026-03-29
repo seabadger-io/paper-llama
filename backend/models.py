@@ -42,6 +42,7 @@ class AppSettings(Base):
     # Ollama Settings
     ollama_url = Column(String, default="http://localhost:11434")
     ollama_model = Column(String, nullable=True)
+    ollama_timeout = Column(Integer, default=300)
 
     # Processing Settings
     update_title = Column(Boolean, default=True)

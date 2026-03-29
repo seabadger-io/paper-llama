@@ -5,9 +5,9 @@ import httpx
 logger = logging.getLogger(__name__)
 
 class OllamaClient:
-    def __init__(self, base_url: str = "http://localhost:11434"):
+    def __init__(self, base_url: str = "http://localhost:11434", timeout: float = 300.0):
         self.base_url = base_url.rstrip('/')
-        self.timeout = 240.0 # AI generation can be slow
+        self.timeout = float(timeout) # AI generation can be slow
 
     async def get_models(self) -> list[dict]:
         """Fetch available models from the Ollama instance."""

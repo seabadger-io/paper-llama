@@ -48,7 +48,8 @@ to create a dedicated user in Paperless with the following permissions:
   top right menu.
 - **Ollama AI Config:** Your local Ollama URL (e.g. `http://localhost:11434`) and the LLM model to use (I had good results with `gpt-oss:20b` on relatively modest hardware).
 - **AI Capabilities Checkboxes:** Choose exactly which fields the AI assistant is allowed to modify.
-  Currently available: Title, Correspondent, Document Type  and Tags
+  Currently available: Title, Correspondent, Document Type, Tags and Creation Date.
+- **API Timeout:** The maximum time to wait for the AI to respond (in seconds).
 - **Document Word Limit:** The maximum number of words to pass to the LLM (0 for unlimited). Helps speed up processing on very large documents.
 - **Schedule Interval:** How often (in minutes) the app polls Paperless-ngx for unprocessed documents. Set to `0` to disable background polling. When disabled, you can manually trigger processing from the Dashboard
 or configure a webhook in Paperless to trigger processing when a new document is added. The contents passed
@@ -67,7 +68,7 @@ updated to an existing tag or None.
 
   **Note:** If the Query Tag is configured, the document will only be re-processed if it has both the Query Tag and the Force Process Tag.
 
-## Database Migrations 🗄️
+## Database Migrations
 
 The application uses Alembic to manage database schema updates.
 
@@ -81,7 +82,7 @@ cd backend
 alembic upgrade head
 ```
 
-## Administration 🛠️
+## Administration
 
 If you ever forget your admin password and need to reset it, you can run the `reset_admin.py` utility.
 
@@ -97,7 +98,7 @@ python reset_admin.py
 ```
 Note: the script will look for the database in `data/paper-llama.db`.
 
-## Testing 🧪
+## Testing
 Paper Llama includes automated tests for both the backend and frontend components.
 
 ### Backend Tests (Pytest)

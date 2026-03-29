@@ -47,6 +47,7 @@ async def test_get_current_settings():
         paperless_token="token",
         ollama_url="url",
         ollama_model="model",
+        ollama_timeout=300,
         update_title=True,
         update_correspondent=True,
         update_document_type=True,
@@ -71,6 +72,7 @@ async def test_get_current_settings_handles_none_for_creation_date():
     # Simulate existing DB row where the new column is NULL
     mock_settings = AppSettings(
         update_creation_date=None,
+        ollama_timeout=None,
         update_title=True,
         update_correspondent=True,
         update_document_type=True,
@@ -84,6 +86,7 @@ async def test_get_current_settings_handles_none_for_creation_date():
 
     result = await get_current_settings(db=mock_db, current_user=mock_user)
     assert result.update_creation_date is False
+    assert result.ollama_timeout == 300
 
 @pytest.mark.asyncio
 async def test_update_settings(mocker):
@@ -97,6 +100,7 @@ async def test_update_settings(mocker):
         paperless_url="http://new-url",
         remove_query_tag=False,
         ollama_url="http://new-ollama",
+        ollama_timeout=600,
         schedule_interval_minutes=15
     )
 
@@ -105,4 +109,5 @@ async def test_update_settings(mocker):
     assert response == {"message": "Settings updated successfully"}
     assert mock_settings.paperless_url == "http://new-url"
     assert mock_settings.schedule_interval_minutes == 15
+    assert mock_settings.ollama_timeout == 600
     assert mock_db.commit_called_count == 1

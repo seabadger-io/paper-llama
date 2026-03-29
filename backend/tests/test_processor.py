@@ -39,6 +39,7 @@ def mock_settings():
     settings.paperless_token = "token"
     settings.ollama_url = "http://ollama"
     settings.ollama_model = "llama"
+    settings.ollama_timeout = 300
     settings.update_title = True
     settings.update_tags = True
     settings.update_correspondent = True
