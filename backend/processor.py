@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -122,6 +123,9 @@ class DocumentProcessor:
     async def process_document(self, document_id: int):
         """Main processing flow for a single document."""
         logger.info(f"Processing document {document_id}")
+
+        # Mark as processing right away
+        await self._mark_processed(document_id, "processing")
 
         # 1. Fetch document and metadata
         try:
@@ -289,6 +293,9 @@ class DocumentProcessor:
         if existing:
             existing.status = status
             existing.error_message = error_message
+            # Only update the timestamp if we're starting a new processing run
+            if status == "processing":
+                existing.processed_at = datetime.utcnow()
         else:
             new_record = ProcessedDocument(
                 document_id=document_id,

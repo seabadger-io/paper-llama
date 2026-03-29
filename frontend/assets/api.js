@@ -37,5 +37,6 @@ export const api = {
     getSettings() { return this.request('/admin/settings', 'GET', null, true); },
     updateSettings(data) { return this.request('/admin/settings', 'PUT', data, true); },
     getLogs(limit=50) { return this.request(`/admin/logs?limit=${limit}`, 'GET', null, true); },
+    getProcessing() { return this.request('/admin/processing', 'GET', null, true); },
     triggerProcessing() { return this.request('/admin/trigger', 'POST', null, true); }
 };

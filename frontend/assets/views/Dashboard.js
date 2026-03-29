@@ -29,6 +29,22 @@ export default {
             <div v-else>
                 <!-- Logs Tab -->
                 <div v-if="tab === 'logs'" class="bg-white shadow overflow-hidden sm:rounded-md p-6">
+                    <div v-if="processingDocs.length > 0" class="mb-6">
+                        <h2 class="text-lg leading-6 font-medium text-blue-800 mb-2 flex items-center">
+                            <svg class="animate-spin -ml-1 mr-2 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Currently Processing
+                        </h2>
+                        <ul class="divide-y divide-blue-200 border border-blue-200 rounded-md bg-blue-50">
+                            <li v-for="doc in processingDocs" :key="doc.document_id" class="px-4 py-3 flex justify-between items-center">
+                                <span class="text-sm font-medium text-blue-900">Document ID: {{ doc.document_id }}</span>
+                                <span class="text-xs text-blue-700">Started: {{ new Date(doc.started_at).toLocaleString() }}</span>
+                            </li>
+                        </ul>
+                    </div>
+
                     <h2 class="text-lg leading-6 font-medium text-gray-900 mb-4">Recent Processing Activity</h2>
                     <div v-if="logs.length === 0" class="text-gray-500 text-sm py-4">No documents processed yet.</div>
                     <ul v-else class="divide-y divide-gray-200">
@@ -178,7 +194,7 @@ export default {
     </div>`,
     components: { LoadingSpinner },
     data() {
-        return { tab: 'logs', logs: [], settings: {}, availableModels: [], availableTags: [], loading: true, error: '', message: '', paperlessStatus: '', logInterval: null }
+        return { tab: 'logs', logs: [], processingDocs: [], settings: {}, availableModels: [], availableTags: [], loading: true, error: '', message: '', paperlessStatus: '', logInterval: null }
     },
     async mounted() {
         await this.loadData();
@@ -196,7 +212,12 @@ export default {
     methods: {
         async refreshLogs() {
             try {
-                this.logs = await api.getLogs();
+                const [logData, processingData] = await Promise.all([
+                    api.getLogs(),
+                    api.getProcessing()
+                ]);
+                this.logs = logData;
+                this.processingDocs = processingData;
             } catch (e) {
                 if (e.message !== 'Unauthorized') {
                     console.error('Background log refresh failed:', e);
@@ -207,11 +228,13 @@ export default {
             try {
                 this.loading = true;
                 this.error = "";
-                const [logData, settingData] = await Promise.all([
+                const [logData, processingData, settingData] = await Promise.all([
                     api.getLogs(),
+                    api.getProcessing(),
                     api.getSettings()
                 ]);
                 this.logs = logData;
+                this.processingDocs = processingData;
                 this.settings = settingData;
                 await this.fetchModels(false);
                 if (this.settings.paperless_url && this.settings.paperless_token) {

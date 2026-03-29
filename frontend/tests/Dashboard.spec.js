@@ -6,6 +6,7 @@ import { api } from '../assets/api.js'
 vi.mock('../assets/api.js', () => ({
     api: {
         getLogs: vi.fn(),
+        getProcessing: vi.fn(),
         getSettings: vi.fn(),
         updateSettings: vi.fn(),
         testOllama: vi.fn(),
@@ -32,6 +33,7 @@ describe('Dashboard Component', () => {
         
         // Default API mock returns for mount
         api.getLogs.mockResolvedValue([])
+        api.getProcessing.mockResolvedValue([])
         api.getSettings.mockResolvedValue({
             paperless_url: 'http://paperless',
             update_title: true

@@ -7,7 +7,7 @@ from sqlalchemy.future import select
 
 from ..database import get_db
 from ..dependencies import create_access_token, get_current_user
-from ..models import AdminUser, AppSettings, DocumentChangeLog
+from ..models import AdminUser, AppSettings, DocumentChangeLog, ProcessedDocument
 from ..scheduler import trigger_workflow, update_scheduler
 
 router = APIRouter()
@@ -153,6 +153,14 @@ async def trigger_processing(
     return {"message": "Processing triggered"}
 
 # --- Dashboard & Audit ---
+
+@router.get("/processing")
+async def get_processing(db: AsyncSession = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
+    """Fetch documents currently being processed."""
+    query = select(ProcessedDocument).where(ProcessedDocument.status == "processing")
+    result = await db.execute(query)
+    docs = result.scalars().all()
+    return [{"document_id": d.document_id, "started_at": d.processed_at} for d in docs]
 
 @router.get("/logs")
 async def get_change_logs(

@@ -114,8 +114,8 @@ async def test_process_document_success(processor, mocker):
         created="2023-01-02"
     )
 
-    assert processor.db.add_called_count == 2
-    assert processor.db.commit_called_count == 2
+    assert processor.db.add_called_count == 3
+    assert processor.db.commit_called_count == 3
 
 @pytest.mark.asyncio
 async def test_process_document_force_tag_removal(processor, mock_settings):
