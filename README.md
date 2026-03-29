@@ -1,7 +1,7 @@
 # Paper Llama
 
-Paper Llama is a companion application for **Paperless-ngx**. It acts as a bridge between your Paperless document management system and an external **Ollama** AI model. By evaluating the content of your newly scanned documents, Paper Llama can automatically generate and assign appropriate **Titles**, **Correspondents**, **Document Types**, and **Tags**. Yes, Paperless does something like this out of the
-box, but its success rate of assigning the correct values was not great for me.
+Paper Llama is a companion application for **Paperless-ngx**. It acts as a bridge between your Paperless document management system and an external **Ollama** AI model. By evaluating the content of your newly scanned documents, Paper Llama can automatically generate and assign appropriate **Titles**, **Correspondents**, **Document Types**, **Tags** and **Creation Date**. Paperless does something like this out of the
+box, but its success rate of assigning the correct values was not great for me, having much better results with the external LLM.
 
 ## Setup & Execution 🚀
 
