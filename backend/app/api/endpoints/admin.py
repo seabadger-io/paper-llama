@@ -1,27 +1,18 @@
 import logging
-import os
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from ..database import get_db
-from ..dependencies import create_access_token, get_current_user
-from ..models import AdminUser, AppSettings, DocumentChangeLog, ProcessedDocument
-from ..scheduler import trigger_workflow, update_scheduler
+from ...api.deps import get_current_user
+from ...core.config import settings as core_settings
+from ...core.scheduler import trigger_workflow, update_scheduler
+from ...db.models import AdminUser, AppSettings, DocumentChangeLog, ProcessedDocument
+from ...db.session import get_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# --- Models ---
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
 
 class SettingsUpdate(BaseModel):
     paperless_url: str | None = None
@@ -46,7 +37,6 @@ class SettingsUpdate(BaseModel):
 class SetupStatus(BaseModel):
     is_setup: bool
 
-# --- Setup Status ---
 @router.get("/status", response_model=SetupStatus)
 async def get_setup_status(db: AsyncSession = Depends(get_db)):
     """Check if the application has been set up."""
@@ -60,24 +50,6 @@ async def get_setup_status(db: AsyncSession = Depends(get_db)):
 
     return {"is_setup": has_admin and has_settings}
 
-# --- Authentication ---
-@router.post("/login", response_model=Token)
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
-    query = select(AdminUser).where(AdminUser.username == request.username)
-    result = await db.execute(query)
-    user = result.scalar_one_or_none()
-
-    if not user or not user.verify_password(request.password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    access_token = create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
-
-# --- Settings ---
 @router.get("/settings", response_model=SettingsUpdate)
 async def get_current_settings(
     db: AsyncSession = Depends(get_db),
@@ -108,7 +80,7 @@ async def get_current_settings(
         query_tag_id=settings.query_tag_id,
         force_process_tag_id=settings.force_process_tag_id,
         custom_prompt=settings.custom_prompt,
-        server_timezone=os.environ.get("TZ", "UTC")
+        server_timezone=core_settings.TZ
     )
 
 @router.put("/settings")
@@ -119,33 +91,33 @@ async def update_settings(
 ):
     query = select(AppSettings).limit(1)
     result = await db.execute(query)
-    settings = result.scalar_one_or_none()
+    app_settings = result.scalar_one_or_none()
 
-    if not settings:
+    if not app_settings:
         raise HTTPException(status_code=404, detail="Settings not found")
 
-    settings.paperless_url = settings_data.paperless_url
-    settings.paperless_token = settings_data.paperless_token
-    settings.ollama_url = settings_data.ollama_url
-    settings.ollama_model = settings_data.ollama_model
-    settings.ollama_timeout = settings_data.ollama_timeout
-    settings.max_retries = settings_data.max_retries
-    settings.update_title = settings_data.update_title
-    settings.update_correspondent = settings_data.update_correspondent
-    settings.update_document_type = settings_data.update_document_type
-    settings.update_tags = settings_data.update_tags
-    settings.update_creation_date = settings_data.update_creation_date
-    settings.document_word_limit = settings_data.document_word_limit
-    settings.schedule_interval_minutes = settings_data.schedule_interval_minutes
-    settings.remove_query_tag = settings_data.remove_query_tag
-    settings.query_tag_id = settings_data.query_tag_id
-    settings.force_process_tag_id = settings_data.force_process_tag_id
-    settings.custom_prompt = settings_data.custom_prompt
+    app_settings.paperless_url = settings_data.paperless_url
+    app_settings.paperless_token = settings_data.paperless_token
+    app_settings.ollama_url = settings_data.ollama_url
+    app_settings.ollama_model = settings_data.ollama_model
+    app_settings.ollama_timeout = settings_data.ollama_timeout
+    app_settings.max_retries = settings_data.max_retries
+    app_settings.update_title = settings_data.update_title
+    app_settings.update_correspondent = settings_data.update_correspondent
+    app_settings.update_document_type = settings_data.update_document_type
+    app_settings.update_tags = settings_data.update_tags
+    app_settings.update_creation_date = settings_data.update_creation_date
+    app_settings.document_word_limit = settings_data.document_word_limit
+    app_settings.schedule_interval_minutes = settings_data.schedule_interval_minutes
+    app_settings.remove_query_tag = settings_data.remove_query_tag
+    app_settings.query_tag_id = settings_data.query_tag_id
+    app_settings.force_process_tag_id = settings_data.force_process_tag_id
+    app_settings.custom_prompt = settings_data.custom_prompt
 
     await db.commit()
 
     # Update scheduler
-    update_scheduler(settings.schedule_interval_minutes)
+    update_scheduler(app_settings.schedule_interval_minutes)
 
     return {"message": "Settings updated successfully"}
 
@@ -157,8 +129,6 @@ async def trigger_processing(
     """Manually trigger document processing."""
     background_tasks.add_task(trigger_workflow, from_webhook=True)
     return {"message": "Processing triggered"}
-
-# --- Dashboard & Audit ---
 
 @router.get("/processing")
 async def get_processing(db: AsyncSession = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):

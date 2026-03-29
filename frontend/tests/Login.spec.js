@@ -6,7 +6,8 @@ import { api } from '../assets/api.js'
 // Mock the API and global storage
 vi.mock('../assets/api.js', () => ({
     api: {
-        login: vi.fn()
+        login: vi.fn(),
+        getStatus: vi.fn(() => Promise.resolve({ is_setup: true }))
     }
 }))
 

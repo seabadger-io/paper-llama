@@ -5,10 +5,11 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from ..database import get_db
-from ..models import AdminUser, AppSettings
-from ..ollama_client import OllamaClient
-from ..paperless_client import PaperlessClient
+from ...core.security import get_password_hash
+from ...db.models import AdminUser, AppSettings
+from ...db.session import get_db
+from ...services.ollama import OllamaClient
+from ...services.paperless import PaperlessClient
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
     # Create admin user
     new_admin = AdminUser(
         username=request.username,
-        hashed_password=AdminUser.get_password_hash(request.password)
+        hashed_password=get_password_hash(request.password)
     )
     db.add(new_admin)
 

@@ -8,12 +8,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import update
 from sqlalchemy.future import select
 
-from .database import AsyncSessionLocal, init_engine
-from .models import AppSettings, ProcessedDocument
-from .routes import admin, webhook, wizard
-from .scheduler import start_scheduler, trigger_workflow, update_scheduler
+from .api.router import api_router
+from .core.scheduler import start_scheduler, trigger_workflow, update_scheduler
+from .db.models import AppSettings, ProcessedDocument
+from .db.session import AsyncSessionLocal, init_engine
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +32,6 @@ async def lifespan(app: FastAPI):
     # Initialize scheduler interval from DB if set
     async with AsyncSessionLocal() as session:
         # Cleanup any stuck processing states from previous crashes
-        from sqlalchemy import update
         await session.execute(
             update(ProcessedDocument)
             .where(ProcessedDocument.status == 'processing')
@@ -45,8 +45,7 @@ async def lifespan(app: FastAPI):
         if settings and settings.schedule_interval_minutes > 0:
             update_scheduler(settings.schedule_interval_minutes)
         if settings:
-            # If the wizard has been run already, trigger a processing cycle on startup to catch any documents that were added while the app was down and documents that were
-            # stuck in processing state / documents that were not processed while the app was down.
+            # If the wizard has been run already, trigger a processing cycle on startup
             logger.info("Triggering initial processing cycle in background...")
             asyncio.create_task(trigger_workflow())
 
@@ -65,21 +64,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API Routers
-app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
-app.include_router(wizard.router, prefix="/api", tags=["wizard"])
-app.include_router(webhook.router, prefix="/api", tags=["webhook"])
-
-@app.get("/api/health")
-def healthcheck():
-    return {"status": "ok"}
+# API Router (includes all sub-routers)
+app.include_router(api_router, prefix="/api")
 
 # Serve Frontend SPA
-frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+# We expect the frontend to be in a sibling directory to 'app'
+# Since main.py is in app/, we go up two levels to get to project root
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(backend_dir)
+frontend_dir = os.path.join(project_root, "frontend")
 assets_dir = os.path.join(frontend_dir, "assets")
 
 if os.path.exists(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+@app.get("/api/health")
+def healthcheck():
+    return {"status": "ok"}
 
 @app.get("/{catchall:path}")
 def serve_spa(catchall: str):
@@ -92,4 +93,4 @@ def serve_spa(catchall: str):
     return {"error": "Frontend not found"}
 
 if __name__ == "__main__":
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8021, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8021, reload=True)

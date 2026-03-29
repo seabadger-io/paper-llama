@@ -19,4 +19,4 @@ ENV DATABASE_URL="sqlite+aiosqlite:////data/paper_llama.db"
 EXPOSE 8021
 
 # Start the FastAPI server with automatic DB migrations
-CMD sh -c "cd backend && alembic upgrade head && cd .. && uvicorn backend.main:app --host 0.0.0.0 --port 8021"
+CMD sh -c "cd backend && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8021"

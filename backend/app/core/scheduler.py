@@ -5,9 +5,9 @@ from datetime import UTC, datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.future import select
 
-from .database import AsyncSessionLocal
-from .models import AppSettings, ProcessedDocument
-from .processor import DocumentProcessor
+from ..db.models import AppSettings, ProcessedDocument
+from ..db.session import AsyncSessionLocal
+from ..services.processor import DocumentProcessor
 
 logger = logging.getLogger(__name__)
 

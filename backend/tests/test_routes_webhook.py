@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import BackgroundTasks, Request
 
-from backend.routes.webhook import paperless_webhook
+from backend.app.api.endpoints.webhook import paperless_webhook
 
 
 @pytest.mark.asyncio

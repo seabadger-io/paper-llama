@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Request
 
-from ..scheduler import trigger_workflow
+from ...core.scheduler import trigger_workflow
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

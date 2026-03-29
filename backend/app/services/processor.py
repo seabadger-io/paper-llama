@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from .models import AppSettings, DocumentChangeLog, ProcessedDocument
-from .ollama_client import OllamaClient
-from .paperless_client import PaperlessClient
+from ..db.models import AppSettings, DocumentChangeLog, ProcessedDocument
+from .ollama import OllamaClient
+from .paperless import PaperlessClient
 
 logger = logging.getLogger(__name__)
 

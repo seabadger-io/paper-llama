@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from backend.models import AdminUser
-from backend.routes.wizard import SetupWizardRequest, run_setup_wizard
+from backend.app.api.endpoints.wizard import SetupWizardRequest, run_setup_wizard
+from backend.app.db.models import AdminUser
 
 
 class MockDB:

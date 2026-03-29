@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.ollama_client import OllamaClient
+from backend.app.services.ollama import OllamaClient
 
 
 @pytest.fixture

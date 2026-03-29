@@ -3,23 +3,19 @@ import os
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
 
-# Define SQLite database path
-DATABASE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-os.makedirs(DATABASE_DIR, exist_ok=True)
-DATABASE_URL = f"sqlite+aiosqlite:///{os.path.join(DATABASE_DIR, 'paper_llama.db')}"
+# The database file is in /data/ relative to the project root.
+# This file is now at backend/app/db/session.py
+# Go up 3 levels to get to project root (db -> app -> backend)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+DB_PATH = os.path.join(BASE_DIR, "data", "paper_llama.db")
+DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 
-# Create async engine
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,  # Set to True for debugging SQL queries
-    connect_args={"check_same_thread": False}
-)
-
-# Async session factory
+engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
-    expire_on_commit=False
+    expire_on_commit=False,
+    autoflush=False
 )
 
 Base = declarative_base()

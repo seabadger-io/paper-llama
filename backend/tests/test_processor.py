@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.models import AppSettings
-from backend.processor import DocumentProcessor
+from backend.app.db.models import AppSettings
+from backend.app.services.processor import DocumentProcessor
 
 
 class MockDB:
@@ -170,7 +170,7 @@ async def test_process_document_retry_error(processor, mock_settings, mocker):
 
     # Force completion logic error
     processor.ollama.generate_completion.side_effect = Exception("Ollama disconnected")
-    mock_sleep = mocker.patch("backend.processor.asyncio.sleep", new_callable=AsyncMock)
+    mock_sleep = mocker.patch("backend.app.services.processor.asyncio.sleep", new_callable=AsyncMock)
 
     await processor.process_document(100)
 

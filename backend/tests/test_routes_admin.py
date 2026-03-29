@@ -2,13 +2,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from backend.models import AdminUser, AppSettings
-from backend.routes.admin import (
+from backend.app.api.endpoints.admin import (
     SettingsUpdate,
     get_current_settings,
     get_setup_status,
     update_settings,
 )
+from backend.app.db.models import AdminUser, AppSettings
 
 
 class MockDB:
@@ -91,7 +91,7 @@ async def test_get_current_settings_handles_none_for_creation_date():
 @pytest.mark.asyncio
 async def test_update_settings(mocker):
     mock_user = AdminUser(username="test")
-    mocker.patch("backend.routes.admin.update_scheduler")
+    mocker.patch("backend.app.api.endpoints.admin.update_scheduler")
 
     mock_settings = AppSettings()
     mock_db = MockDB(mock_settings)

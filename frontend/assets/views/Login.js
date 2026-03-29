@@ -26,6 +26,16 @@ export default {
         </div>
     </div>`,
     data() { return { username: '', password: '', error: '', loading: false } },
+    async mounted() {
+        try {
+            const status = await api.getStatus();
+            if (!status.is_setup) {
+                this.$router.push('/wizard');
+            }
+        } catch (e) {
+            console.error('Failed to check setup status:', e);
+        }
+    },
     methods: {
         async login() {
             try {

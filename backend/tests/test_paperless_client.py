@@ -2,7 +2,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.paperless_client import PaperlessClient
+from backend.app.services.paperless import PaperlessClient
 
 
 @pytest.fixture

@@ -4,8 +4,9 @@ import getpass
 import os
 
 from sqlalchemy.future import select
-from backend.database import AsyncSessionLocal, init_engine
-from backend.models import AdminUser
+from backend.app.db.session import AsyncSessionLocal, init_engine
+from backend.app.db.models import AdminUser
+from backend.app.core.security import get_password_hash
 
 async def reset_password():
     print("Paper Llama Admin Password Reset")
@@ -17,9 +18,9 @@ async def reset_password():
     # reasonably well based on __file__ if not overridden.
     
     # Let's override the DB directory if we are clearly in docker (/data exists)
-    import backend.database as db_hook
+    from backend.app.db import session as db_session
     if os.path.exists("/data"):
-        db_hook.DATABASE_URL = "sqlite+aiosqlite:////data/paper_llama.db"
+        db_session.DATABASE_URL = "sqlite+aiosqlite:////data/paper_llama.db"
     
     await init_engine()
 
@@ -45,12 +46,12 @@ async def reset_password():
 
         if user:
             print(f"User '{username}' found. Updating password...")
-            user.hashed_password = AdminUser.get_password_hash(password)
+            user.hashed_password = get_password_hash(password)
         else:
             print(f"User '{username}' not found. Creating new admin user...")
             new_user = AdminUser(
                 username=username,
-                hashed_password=AdminUser.get_password_hash(password)
+                hashed_password=get_password_hash(password)
             )
             session.add(new_user)
             

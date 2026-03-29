@@ -90,7 +90,7 @@ describe('api.js HTTP Wrapper', () => {
         
         await api.login('admin', 'password')
         
-        expect(global.fetch).toHaveBeenCalledWith('/api/admin/login', {
+        expect(global.fetch).toHaveBeenCalledWith('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: 'admin', password: 'password' })

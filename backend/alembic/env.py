@@ -16,7 +16,12 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-from backend.models import Base
+import sys
+from os.path import abspath, dirname
+sys.path.insert(0, dirname(abspath(dirname(__file__))))
+
+from app.db.session import Base
+from app.db import models # ensure models are registered
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

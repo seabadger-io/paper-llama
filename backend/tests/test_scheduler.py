@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.models import AppSettings
-from backend.scheduler import _run_processing_cycle
+from backend.app.core.scheduler import _run_processing_cycle
+from backend.app.db.models import AppSettings
 
 
 @pytest.fixture
@@ -17,8 +17,8 @@ def mock_settings():
     return settings
 
 @pytest.mark.asyncio
-@patch('backend.scheduler.AsyncSessionLocal')
-@patch('backend.scheduler.DocumentProcessor')
+@patch('backend.app.core.scheduler.AsyncSessionLocal')
+@patch('backend.app.core.scheduler.DocumentProcessor')
 async def test_run_processing_cycle_halts_on_missing_query_tag(
     mock_document_processor_class,
     mock_async_session_local,
@@ -54,8 +54,8 @@ async def test_run_processing_cycle_halts_on_missing_query_tag(
     mock_processor_instance.process_document.assert_not_called()
 
 @pytest.mark.asyncio
-@patch('backend.scheduler.AsyncSessionLocal')
-@patch('backend.scheduler.DocumentProcessor')
+@patch('backend.app.core.scheduler.AsyncSessionLocal')
+@patch('backend.app.core.scheduler.DocumentProcessor')
 async def test_run_processing_cycle_reprocesses_stale_docs(
     mock_document_processor_class,
     mock_async_session_local,

@@ -33,7 +33,7 @@ export const api = {
     testPaperless(data) { return this.request('/test-paperless', 'POST', data); },
     
     // Auth & Admin
-    login(username, password) { return this.request('/admin/login', 'POST', { username, password }); },
+    login(username, password) { return this.request('/auth/login', 'POST', { username, password }); },
     getSettings() { return this.request('/admin/settings', 'GET', null, true); },
     updateSettings(data) { return this.request('/admin/settings', 'PUT', data, true); },
     getLogs(limit=50) { return this.request(`/admin/logs?limit=${limit}`, 'GET', null, true); },
