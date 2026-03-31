@@ -44,58 +44,54 @@ async def _run_processing_cycle():
 
         processor = DocumentProcessor(db_session=session, settings=settings)
 
-        try:
-            # First fetch tags to map the force_process_tag to its ID
-            system_tags, _, _ = await processor.get_cached_metadata()
+        # First fetch tags to map the force_process_tag to its ID
+        system_tags, _, _ = await processor.get_cached_metadata()
 
-            if settings.query_tag_id:
-                if not any(t.get("id") == settings.query_tag_id for t in system_tags):
-                    logger.error(f"Configured query tag ID '{settings.query_tag_id}' not found in Paperless. Stopping processing.")
-                    return
+        if settings.query_tag_id:
+            if not any(t.get("id") == settings.query_tag_id for t in system_tags):
+                logger.error(f"Configured query tag ID '{settings.query_tag_id}' not found in Paperless. Stopping processing.")
+                return
 
-            force_tag_id = settings.force_process_tag_id
+        force_tag_id = settings.force_process_tag_id
 
-            # Query documents from paperless
-            tags_filter = [settings.query_tag_id] if settings.query_tag_id else None
-            documents = await processor.paperless.get_documents(tags=tags_filter)
+        # Query documents from paperless
+        tags_filter = [settings.query_tag_id] if settings.query_tag_id else None
+        documents = await processor.paperless.get_documents(tags=tags_filter)
 
-            new_docs = []
-            error_docs = []
+        new_docs = []
+        error_docs = []
 
-            for doc in documents:
-                doc_id = doc.get("id")
-                doc_tags = doc.get("tags", [])
-                status_info = processed_data.get(doc_id)
-                status, processed_at = status_info if status_info else (None, None)
+        for doc in documents:
+            doc_id = doc.get("id")
+            doc_tags = doc.get("tags", [])
+            status_info = processed_data.get(doc_id)
+            status, processed_at = status_info if status_info else (None, None)
 
-                if status == "success":
-                    if force_tag_id and force_tag_id in doc_tags:
-                        logger.info(f"Document {doc_id} already processed, but force tag found. Reprocessing.")
-                        new_docs.append(doc_id)
-                    else:
-                        continue # Skip successfully processed
-                elif status == "error":
-                    error_docs.append(doc_id)
-                elif status == "processing":
-                    # Check for staleness (e.g., 30 minutes)
-                    if processed_at and datetime.now(UTC) - processed_at > timedelta(minutes=30):
-                        logger.warning(f"Document {doc_id} has been in processing for too long. Adding to retry queue.")
-                        error_docs.append(doc_id)
-                    else:
-                        continue # Still actively processing (probably)
-                else:
+            if status == "success":
+                if force_tag_id and force_tag_id in doc_tags:
+                    logger.info(f"Document {doc_id} already processed, but force tag found. Reprocessing.")
                     new_docs.append(doc_id)
+                else:
+                    continue # Skip successfully processed
+            elif status == "error":
+                error_docs.append(doc_id)
+            elif status == "processing":
+                # Check for staleness (e.g., 30 minutes)
+                if processed_at and datetime.now(UTC) - processed_at > timedelta(minutes=30):
+                    logger.warning(f"Document {doc_id} has been in processing for too long. Adding to retry queue.")
+                    error_docs.append(doc_id)
+                else:
+                    continue # Still actively processing (probably)
+            else:
+                new_docs.append(doc_id)
 
-            queue = new_docs + error_docs
+        queue = new_docs + error_docs
 
-            for doc_id in queue:
-                # We do this sequentially to not overload Ollama or Paperless
-                await processor.process_document(doc_id)
-                # Small delay to keep the system responsive
-                await asyncio.sleep(1)
-
-        except Exception as e:
-            logger.error(f"Error during scheduled run: {e}")
+        for doc_id in queue:
+            # We do this sequentially to not overload Ollama or Paperless
+            await processor.process_document(doc_id)
+            # Small delay to keep the system responsive
+            await asyncio.sleep(1)
 
 async def trigger_workflow(from_webhook=False):
     """Entry point to trigger the workflow, handling overlaps and queues."""
@@ -113,8 +109,21 @@ async def trigger_workflow(from_webhook=False):
         is_processing = True
 
     try:
+        max_retries = 3
+        retry_count = 0
         while True:
-            await _run_processing_cycle()
+            try:
+                await _run_processing_cycle()
+                retry_count = 0 # reset on success
+            except Exception as e:
+                retry_count += 1
+                logger.exception(f"Error during processing cycle (Attempt {retry_count}/{max_retries}):")
+                if retry_count >= max_retries:
+                    logger.error("Max retries reached. Aborting this workflow trigger.")
+                    break
+                logger.info("Waiting 10 seconds before retrying...")
+                await asyncio.sleep(10)
+                continue
 
             async with processing_lock:
                 if processing_queued:
