@@ -117,7 +117,7 @@ async def trigger_workflow(from_webhook=False):
                 retry_count = 0 # reset on success
             except Exception as e:
                 retry_count += 1
-                logger.exception(f"Error during processing cycle (Attempt {retry_count}/{max_retries}):")
+                logger.exception(f"Error during processing cycle (Attempt {retry_count}/{max_retries}): {e}")
                 if retry_count >= max_retries:
                     logger.error("Max retries reached. Aborting this workflow trigger.")
                     break
