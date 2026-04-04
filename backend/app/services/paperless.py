@@ -5,13 +5,11 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+
 class PaperlessClient:
     def __init__(self, base_url: str, token: str):
-        self.base_url = base_url.rstrip('/')
-        self.headers = {
-            "Authorization": f"Token {token}",
-            "Accept": "application/json"
-        }
+        self.base_url = base_url.rstrip("/")
+        self.headers = {"Authorization": f"Token {token}", "Accept": "application/json"}
         self.timeout = 15.0
 
     async def _get(self, endpoint: str, params: dict | None = None) -> Any:
@@ -54,7 +52,9 @@ class PaperlessClient:
 
     # --- Fetch Documents ---
 
-    async def get_documents(self, query: str | None = None, tags: list[int] | None = None) -> list[dict]:
+    async def get_documents(
+        self, query: str | None = None, tags: list[int] | None = None
+    ) -> list[dict]:
         params = {}
         if query:
             params["query"] = query
@@ -76,7 +76,7 @@ class PaperlessClient:
         correspondent_id: int | None = None,
         document_type_id: int | None = None,
         tags: list[int] | None = None,
-        created: str | None = None
+        created: str | None = None,
     ) -> dict:
         update_data = {}
         if title is not None:

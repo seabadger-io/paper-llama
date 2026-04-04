@@ -12,13 +12,16 @@ from ...db.session import get_db
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 class LoginRequest(BaseModel):
     username: str
     password: str
 
+
 class Token(BaseModel):
     access_token: str
     token_type: str
+
 
 @router.post("/login", response_model=Token)
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):

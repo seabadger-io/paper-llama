@@ -2,55 +2,59 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.app.services.ollama import OllamaClient
+from backend.app.services.llamacpp import LlamaCppClient
 
 
 @pytest.fixture
-def ollama_client():
-    return OllamaClient(base_url="http://test_ollama:11434")
+def llamacpp_client():
+    return LlamaCppClient(base_url="http://test_llamacpp:8080")
 
 
-def test_ollama_client_init(ollama_client):
-    assert ollama_client.base_url == "http://test_ollama:11434"
+def test_llamacpp_client_init(llamacpp_client):
+    assert llamacpp_client.base_url == "http://test_llamacpp:8080"
 
 
 @pytest.mark.asyncio
-async def test_generate_completion(mocker, ollama_client):
+async def test_generate_completion(mocker, llamacpp_client):
     mock_response = mocker.Mock()
-    mock_response.json.return_value = {"response": "This is a completion"}
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "This is a completion"}}]
+    }
     mock_response.raise_for_status = mocker.Mock()
 
     mock_client_instance = AsyncMock()
     mock_client_instance.post.return_value = mock_response
     mocker.patch("httpx.AsyncClient.__aenter__", return_value=mock_client_instance)
 
-    response_text = await ollama_client.generate_completion(
+    response_text = await llamacpp_client.generate_completion(
         model="llama3", prompt="Tell me a joke", system="You are an assistant"
     )
 
-    # Verify standard request payload to Ollama
     mock_client_instance.post.assert_called_once_with(
-        "http://test_ollama:11434/api/generate",
+        "http://test_llamacpp:8080/v1/chat/completions",
         json={
             "model": "llama3",
-            "prompt": "Tell me a joke",
-            "system": "You are an assistant",
+            "messages": [
+                {"role": "system", "content": "You are an assistant"},
+                {"role": "user", "content": "Tell me a joke"},
+            ],
             "stream": False,
+            "temperature": 0.0,
         },
     )
     assert response_text == "This is a completion"
 
 
 @pytest.mark.asyncio
-async def test_get_models(mocker, ollama_client):
+async def test_get_models(mocker, llamacpp_client):
     mock_response = mocker.Mock()
-    mock_response.json.return_value = {"models": [{"name": "llama3"}]}
+    mock_response.json.return_value = {"data": [{"id": "llama3"}]}
     mock_response.raise_for_status = mocker.Mock()
 
     mock_client_instance = AsyncMock()
     mock_client_instance.get.return_value = mock_response
     mocker.patch("httpx.AsyncClient.__aenter__", return_value=mock_client_instance)
 
-    models = await ollama_client.get_models()
+    models = await llamacpp_client.get_models()
     assert len(models) == 1
     assert models[0]["name"] == "llama3"

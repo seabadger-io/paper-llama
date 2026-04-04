@@ -7,11 +7,9 @@ from ...core.scheduler import trigger_workflow
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 @router.post("/webhook")
-async def paperless_webhook(
-    request: Request,
-    background_tasks: BackgroundTasks
-):
+async def paperless_webhook(request: Request, background_tasks: BackgroundTasks):
     """
     Receives webhooks from paperless-ngx.
     Since paperless webhook payloads are unreliable for document IDs,

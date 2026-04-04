@@ -7,6 +7,7 @@ def test_secret_key_generation():
     assert settings.SECRET_KEY != "GENERATE_ON_STARTUP"
     assert len(settings.SECRET_KEY) == 64  # token_hex(32) is 64 chars
 
+
 def test_secret_key_preservation():
     # Test that it DOES NOT override a provided secret key
     custom_key = "my_custom_secret_key"

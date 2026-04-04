@@ -13,9 +13,10 @@ def event_loop():
     yield loop
     loop.close()
 
+
 @pytest.fixture
 def mock_httpx_client(mocker):
     """Mocks the httpx.AsyncClient to avoid making actual HTTP requests during tests."""
     mock_client = mocker.AsyncMock()
-    mocker.patch('httpx.AsyncClient', return_value=mock_client)
+    mocker.patch("httpx.AsyncClient", return_value=mock_client)
     return mock_client

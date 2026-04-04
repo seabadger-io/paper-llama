@@ -8,29 +8,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from ..db.models import AppSettings, DocumentChangeLog, ProcessedDocument
+from .llamacpp import LlamaCppClient
 from .ollama import OllamaClient
 from .paperless import PaperlessClient
 
 logger = logging.getLogger(__name__)
 
+
 class DocumentProcessor:
-    _metadata_cache = {
-        "tags": [],
-        "correspondents": [],
-        "document_types": [],
-        "timestamp": 0.0
-    }
+    _metadata_cache = {"tags": [], "correspondents": [], "document_types": [], "timestamp": 0.0}
 
     def __init__(self, db_session: AsyncSession, settings: AppSettings):
         self.db = db_session
         self.settings = settings
         self.paperless = PaperlessClient(
-            base_url=settings.paperless_url,
-            token=settings.paperless_token
+            base_url=settings.paperless_url, token=settings.paperless_token
         )
         self.ollama = OllamaClient(
-            base_url=settings.ollama_url,
-            timeout=float(settings.ollama_timeout) if settings.ollama_timeout else 300.0
+            base_url=settings.ollama_url or "http://localhost:11434",
+            timeout=float(settings.ollama_timeout) if settings.ollama_timeout else 300.0,
+        )
+        self.llamacpp = LlamaCppClient(
+            base_url=settings.llamacpp_url or "http://localhost:8080",
+            timeout=float(settings.llamacpp_timeout) if settings.llamacpp_timeout else 300.0,
         )
 
     async def _build_prompt(
@@ -38,13 +38,13 @@ class DocumentProcessor:
         document_content: str,
         tags: list[dict],
         correspondents: list[dict],
-        document_types: list[dict]
+        document_types: list[dict],
     ) -> str:
         """Constructs the prompt for Ollama."""
 
         prompt_parts = [
             "Analyze the document text below and select the best matching",
-            "metadata from the provided lists based on the rules.\n"
+            "metadata from the provided lists based on the rules.\n",
         ]
 
         if self.settings.update_correspondent:
@@ -57,18 +57,30 @@ class DocumentProcessor:
             tags_str = ", ".join([f"{t['id']}:{t['name']}" for t in tags])
             prompt_parts.append(f"AVAILABLE TAGS (ID:Name): {tags_str}")
 
-        prompt_parts.append("\nRULES:\n* You MUST respond with ONLY valid JSON and absolutely NO extra text, comments, or markdown blocks outside the JSON.")
+        prompt_parts.append(
+            "\nRULES:\n* You MUST respond with ONLY valid JSON and absolutely NO extra text, comments, or markdown blocks outside the JSON."
+        )
 
         if self.settings.update_correspondent:
-            prompt_parts.append("* Select EXACTLY ONE correspondent ID, or null if absolutely none match. If you are not sure, select null. Do not guess. Consider if the document contains any of the existing correspondent names (either in it's short or long form), especially in the first part of the document.")
+            prompt_parts.append(
+                "* Select EXACTLY ONE correspondent ID, or null if absolutely none match. If you are not sure, select null. Do not guess. Consider if the document contains any of the existing correspondent names (either in it's short or long form), especially in the first part of the document."
+            )
         if self.settings.update_document_type:
-            prompt_parts.append("* Select EXACTLY ONE document type ID, or null if absolutely none match.")
+            prompt_parts.append(
+                "* Select EXACTLY ONE document type ID, or null if absolutely none match."
+            )
         if self.settings.update_tags:
-            prompt_parts.append("* Select maximum 5 tag IDs that best describe the document. Only select tags if they are actually relevant to the document. Don't select tags just because they are available or because they are in the document. Select tags that can be used to identify and categorize the document. For example, an employment contract should not be tagged as pension even if pension is mentioned in the document.")
+            prompt_parts.append(
+                "* Select maximum 5 tag IDs that best describe the document. Only select tags if they are actually relevant to the document. Don't select tags just because they are available or because they are in the document. Select tags that can be used to identify and categorize the document. For example, an employment contract should not be tagged as pension even if pension is mentioned in the document."
+            )
         if self.settings.update_title:
-            prompt_parts.append("* Extract a short, concise title for the document based on its contents.")
+            prompt_parts.append(
+                "* Extract a short, concise title for the document based on its contents."
+            )
         if self.settings.update_creation_date:
-            prompt_parts.append("* Try to identify the document creation date. If unsure, return null.")
+            prompt_parts.append(
+                "* Try to identify the document creation date. If unsure, return null."
+            )
 
         prompt_parts.append("\nEXPECTED JSON FORMAT:")
 
@@ -91,7 +103,7 @@ class DocumentProcessor:
 
         if self.settings.document_word_limit > 0:
             words = document_content.split()
-            truncated_content = " ".join(words[:self.settings.document_word_limit])
+            truncated_content = " ".join(words[: self.settings.document_word_limit])
             prompt_parts.append(f"\nDOCUMENT TEXT:\n{truncated_content}\n")
         else:
             prompt_parts.append(f"\nDOCUMENT TEXT:\n{document_content}\n")
@@ -102,7 +114,10 @@ class DocumentProcessor:
         """Fetches metadata from Paperless or returns cached version if less than 10 minutes old."""
         current_time = time.time()
         # 10 minutes = 600 seconds
-        if current_time - DocumentProcessor._metadata_cache["timestamp"] > 600 or not DocumentProcessor._metadata_cache["tags"]:
+        if (
+            current_time - DocumentProcessor._metadata_cache["timestamp"] > 600
+            or not DocumentProcessor._metadata_cache["tags"]
+        ):
             logger.info("Refreshing Paperless metadata cache...")
             tags = await self.paperless.get_tags()
             correspondents = await self.paperless.get_correspondents()
@@ -112,13 +127,13 @@ class DocumentProcessor:
                 "tags": tags,
                 "correspondents": correspondents,
                 "document_types": document_types,
-                "timestamp": current_time
+                "timestamp": current_time,
             }
 
         return (
             DocumentProcessor._metadata_cache["tags"],
             DocumentProcessor._metadata_cache["correspondents"],
-            DocumentProcessor._metadata_cache["document_types"]
+            DocumentProcessor._metadata_cache["document_types"],
         )
 
     async def process_document(self, document_id: int):
@@ -146,16 +161,28 @@ class DocumentProcessor:
                     tags, correspondents, document_types = await self.get_cached_metadata()
 
                     # 2. Query Ollama
-                    prompt_tags = [t for t in tags if t['id'] not in (self.settings.query_tag_id, self.settings.force_process_tag_id)]
-                    prompt = await self._build_prompt(doc_content, prompt_tags, correspondents, document_types)
-                    system_prompt = "You are a document classification AI. You output valid JSON only."
+                    prompt_tags = [
+                        t
+                        for t in tags
+                        if t["id"]
+                        not in (self.settings.query_tag_id, self.settings.force_process_tag_id)
+                    ]
+                    prompt = await self._build_prompt(
+                        doc_content, prompt_tags, correspondents, document_types
+                    )
+                    system_prompt = (
+                        "You are a document classification AI. You output valid JSON only."
+                    )
 
                     start_time = time.perf_counter()
-                    ai_response_text = await self.ollama.generate_completion(
-                        model=self.settings.ollama_model,
-                        prompt=prompt,
-                        system=system_prompt
-                    )
+                    if self.settings.ai_backend == "llamacpp":
+                        ai_response_text = await self.llamacpp.generate_completion(
+                            model=self.settings.llamacpp_model, prompt=prompt, system=system_prompt
+                        )
+                    else:
+                        ai_response_text = await self.ollama.generate_completion(
+                            model=self.settings.ollama_model, prompt=prompt, system=system_prompt
+                        )
                     ai_processing_time_ms = int((time.perf_counter() - start_time) * 1000)
 
                     # Find JSON block if Ollama adds markdown
@@ -174,7 +201,7 @@ class DocumentProcessor:
                         "tags": doc.get("tags", []),
                         "correspondent": doc.get("correspondent"),
                         "document_type": doc.get("document_type"),
-                        "created": doc.get("created")
+                        "created": doc.get("created"),
                     }
 
                     new_corr_id = (
@@ -208,13 +235,13 @@ class DocumentProcessor:
                     new_state = {
                         "tags": final_tags,
                         "correspondent": new_corr_id,
-                        "document_type": new_dtype_id
+                        "document_type": new_dtype_id,
                     }
 
                     update_kwargs = {
                         "correspondent_id": new_corr_id,
                         "document_type_id": new_dtype_id,
-                        "tags": final_tags
+                        "tags": final_tags,
                     }
 
                     if self.settings.update_title and ai_data.get("title"):
@@ -230,10 +257,7 @@ class DocumentProcessor:
                         new_state["created"] = original_state.get("created")
 
                 # 4. Update Paperless
-                await self.paperless.update_document(
-                    document_id,
-                    **update_kwargs
-                )
+                await self.paperless.update_document(document_id, **update_kwargs)
 
                 def _resolve_id(items, item_id):
                     if item_id is None:
@@ -250,10 +274,14 @@ class DocumentProcessor:
 
                 log_original = {
                     "title": original_state.get("title"),
-                    "correspondent": _resolve_id(correspondents, original_state.get("correspondent")),
-                    "document_type": _resolve_id(document_types, original_state.get("document_type")),
+                    "correspondent": _resolve_id(
+                        correspondents, original_state.get("correspondent")
+                    ),
+                    "document_type": _resolve_id(
+                        document_types, original_state.get("document_type")
+                    ),
                     "tags": _resolve_ids(tags, original_state.get("tags")),
-                    "created": original_state.get("created")
+                    "created": original_state.get("created"),
                 }
 
                 log_new = {
@@ -262,7 +290,7 @@ class DocumentProcessor:
                     "document_type": _resolve_id(document_types, new_state.get("document_type")),
                     "tags": _resolve_ids(tags, new_state.get("tags")),
                     "created": new_state.get("created"),
-                    "ai_processing_time_ms": ai_processing_time_ms
+                    "ai_processing_time_ms": ai_processing_time_ms,
                 }
 
                 # Log changes
@@ -271,7 +299,7 @@ class DocumentProcessor:
                     original_state=log_original,
                     new_state=log_new,
                     prompt_used=prompt,
-                    ai_response=ai_response_text
+                    ai_response=ai_response_text,
                 )
                 self.db.add(log_entry)
                 await self._mark_processed(document_id, "success")
@@ -285,16 +313,20 @@ class DocumentProcessor:
                 logger.warning(f"Attempt {attempt + 1} failed for doc {document_id}: {err_str}")
                 if attempt == max_retries - 1:
                     await self.db.rollback()
-                    logger.error(f"Failed all {max_retries} attempts for doc {document_id}: {err_str}")
+                    logger.error(
+                        f"Failed all {max_retries} attempts for doc {document_id}: {err_str}"
+                    )
                     await self._mark_processed(document_id, "error", err_str)
 
                     # Log failure to activity logs
                     log_entry = DocumentChangeLog(
                         document_id=document_id,
-                        original_state=log_original if 'log_original' in locals() else {"title": f"Document {document_id}"},
+                        original_state=log_original
+                        if "log_original" in locals()
+                        else {"title": f"Document {document_id}"},
                         new_state={"error": err_str, "attempts": max_retries},
                         prompt_used=prompt if prompt else "",
-                        ai_response=ai_response_text if ai_response_text else ""
+                        ai_response=ai_response_text if ai_response_text else "",
                     )
                     self.db.add(log_entry)
                     await self.db.commit()
@@ -315,9 +347,7 @@ class DocumentProcessor:
                 existing.processed_at = datetime.now(UTC)
         else:
             new_record = ProcessedDocument(
-                document_id=document_id,
-                status=status,
-                error_message=error_message
+                document_id=document_id, status=status, error_message=error_message
             )
             self.db.add(new_record)
 

@@ -24,6 +24,7 @@ class MockDB:
     async def commit(self):
         self.commit_called_count += 1
 
+
 @pytest.mark.asyncio
 async def test_run_setup_wizard_already_configured():
     mock_db = MockDB(AdminUser())
@@ -35,7 +36,7 @@ async def test_run_setup_wizard_already_configured():
         paperless_token="token",
         ollama_url="http://test",
         ollama_model="llama",
-        schedule_interval_minutes=0
+        schedule_interval_minutes=0,
     )
 
     with pytest.raises(HTTPException) as exc_info:
@@ -43,6 +44,7 @@ async def test_run_setup_wizard_already_configured():
 
     assert exc_info.value.status_code == 400
     assert "Application already configured" in exc_info.value.detail
+
 
 @pytest.mark.asyncio
 async def test_run_setup_wizard_success():
@@ -55,7 +57,7 @@ async def test_run_setup_wizard_success():
         paperless_token="token",
         ollama_url="http://test",
         ollama_model="llama",
-        schedule_interval_minutes=15
+        schedule_interval_minutes=15,
     )
 
     response = await run_setup_wizard(request, db=mock_db)

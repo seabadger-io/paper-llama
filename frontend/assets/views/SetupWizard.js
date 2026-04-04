@@ -49,10 +49,22 @@ export default {
                     </div>
                 </div>
 
-                <!-- Ollama Config -->
+                <!-- AI Backend Selection -->
                 <div class="border-b border-gray-200 pb-4">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Ollama AI</h3>
-                    <div class="space-y-4">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">AI Backend</h3>
+                    <div class="flex space-x-4 mb-4">
+                        <label class="flex items-center">
+                            <input type="radio" v-model="form.ai_backend" value="ollama" class="text-blue-600 focus:ring-blue-500">
+                            <span class="ml-2 text-sm text-gray-700">Ollama</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="radio" v-model="form.ai_backend" value="llamacpp" class="text-blue-600 focus:ring-blue-500">
+                            <span class="ml-2 text-sm text-gray-700">Llama.cpp</span>
+                        </label>
+                    </div>
+
+                    <!-- Ollama Config -->
+                    <div v-if="form.ai_backend === 'ollama'" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Ollama API URL (e.g. http://localhost:11434)</label>
                             <input v-model="form.ollama_url" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
@@ -67,11 +79,37 @@ export default {
                             <p class="text-xs text-gray-500 mb-1">Number of retries per cycle if saving fails.</p>
                             <input type="number" v-model="form.max_retries" required min="1" max="10" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                         </div>
-                        <button type="button" @click="fetchModels" class="w-full justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Test & Fetch Models</button>
+                        <button type="button" @click="fetchModels('ollama')" class="w-full justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Test & Fetch Models</button>
                         
                         <div v-if="availableModels.length > 0">
                             <label class="block text-sm font-medium text-gray-700">Select Model</label>
                             <select v-model="form.ollama_model" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Llama.cpp Config -->
+                    <div v-if="form.ai_backend === 'llamacpp'" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Llama.cpp API URL (e.g. http://localhost:8080)</label>
+                            <input v-model="form.llamacpp_url" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">API Timeout (seconds)</label>
+                            <p class="text-xs text-gray-500 mb-1">Maximum time to wait for the AI to respond.</p>
+                            <input type="number" v-model="form.llamacpp_timeout" required min="30" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Max Retries</label>
+                            <p class="text-xs text-gray-500 mb-1">Number of retries per cycle if saving fails.</p>
+                            <input type="number" v-model="form.max_retries" required min="1" max="10" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        </div>
+                        <button type="button" @click="fetchModels('llamacpp')" class="w-full justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Test & Fetch Models</button>
+                        
+                        <div v-if="availableModels.length > 0">
+                            <label class="block text-sm font-medium text-gray-700">Select Model</label>
+                            <select v-model="form.llamacpp_model" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
                                 <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
                             </select>
                         </div>
@@ -159,9 +197,13 @@ export default {
                 password: '',
                 paperless_url: '',
                 paperless_token: '',
+                ai_backend: 'ollama',
                 ollama_url: 'http://localhost:11434',
                 ollama_model: '',
                 ollama_timeout: 300,
+                llamacpp_url: 'http://localhost:8080',
+                llamacpp_model: '',
+                llamacpp_timeout: 300,
                 max_retries: 3,
                 update_title: true,
                 update_correspondent: true,
@@ -171,7 +213,7 @@ export default {
                 custom_prompt: '',
                 document_word_limit: 1500,
                 schedule_interval_minutes: 5,
-                remove_query_tag: true,
+                remove_query_tag: true
             },
             confirm_password: '',
             availableModels: [],
@@ -179,7 +221,7 @@ export default {
             paperlessStatus: '',
             error: '',
             loading: false
-        }
+        };
     },
     computed: {
         passwordMismatch() {
@@ -187,13 +229,23 @@ export default {
         }
     },
     methods: {
-        async fetchModels() {
+        async fetchModels(backend) {
             try {
                 this.error = '';
-                const res = await api.testOllama({ ollama_url: this.form.ollama_url });
-                this.availableModels = res.models;
-                if (this.availableModels.length > 0) {
-                    this.form.ollama_model = this.availableModels[0];
+                this.availableModels = [];
+                let res;
+                if (backend === 'llamacpp') {
+                    res = await api.testLlamacpp({ llamacpp_url: this.form.llamacpp_url });
+                    this.availableModels = res.models;
+                    if (this.availableModels.length > 0) {
+                        this.form.llamacpp_model = this.availableModels[0];
+                    }
+                } else {
+                    res = await api.testOllama({ ollama_url: this.form.ollama_url });
+                    this.availableModels = res.models;
+                    if (this.availableModels.length > 0) {
+                        this.form.ollama_model = this.availableModels[0];
+                    }
                 }
             } catch (e) {
                 this.error = 'Failed to fetch models: ' + e.message;

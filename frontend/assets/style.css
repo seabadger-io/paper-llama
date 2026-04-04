@@ -1,5 +1,6 @@
 /* Custom styles for minimal interventions not covered by Tailwind CDN. */
-body, html {
+body,
+html {
     margin: 0;
     padding: 0;
     background-color: #f9fafb;

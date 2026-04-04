@@ -4,10 +4,11 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+
 class OllamaClient:
     def __init__(self, base_url: str = "http://localhost:11434", timeout: float = 300.0):
-        self.base_url = base_url.rstrip('/')
-        self.timeout = float(timeout) # AI generation can be slow
+        self.base_url = base_url.rstrip("/")
+        self.timeout = float(timeout)  # AI generation can be slow
 
     async def get_models(self) -> list[dict]:
         """Fetch available models from the Ollama instance."""
@@ -32,10 +33,7 @@ class OllamaClient:
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:
-                response = await client.post(
-                    f"{self.base_url}/api/generate",
-                    json=payload
-                )
+                response = await client.post(f"{self.base_url}/api/generate", json=payload)
                 response.raise_for_status()
                 data = response.json()
                 return data.get("response", "")

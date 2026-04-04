@@ -20,6 +20,7 @@ from .db.session import AsyncSessionLocal, init_engine
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -34,8 +35,8 @@ async def lifespan(app: FastAPI):
         # Cleanup any stuck processing states from previous crashes
         await session.execute(
             update(ProcessedDocument)
-            .where(ProcessedDocument.status == 'processing')
-            .values(status='error', error_message='Interrupted by application restart')
+            .where(ProcessedDocument.status == "processing")
+            .values(status="error", error_message="Interrupted by application restart")
         )
         await session.commit()
 
@@ -52,6 +53,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     logger.info("Shutting down...")
+
 
 app = FastAPI(title="Paper Llama API", lifespan=lifespan)
 
@@ -78,9 +80,11 @@ assets_dir = os.path.join(frontend_dir, "assets")
 if os.path.exists(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
+
 @app.get("/api/health")
 def healthcheck():
     return {"status": "ok"}
+
 
 @app.get("/{catchall:path}")
 def serve_spa(catchall: str):
@@ -91,6 +95,7 @@ def serve_spa(catchall: str):
     if os.path.exists(index_path):
         return FileResponse(index_path)
     return {"error": "Frontend not found"}
+
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8021, reload=True)

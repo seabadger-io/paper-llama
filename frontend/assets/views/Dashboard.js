@@ -116,26 +116,69 @@ export default {
                             <div v-if="paperlessStatus" class="mt-2 text-sm text-green-600">{{ paperlessStatus }}</div>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Ollama API URL</label>
-                            <div class="flex space-x-2">
-                                <input v-model="settings.ollama_url" required class="mt-1 appearance-none rounded-md flex-1 block w-full px-3 py-2 border border-gray-300 sm:text-sm">
-                                <button type="button" @click="fetchModels" class="mt-1 px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Fetch Models</button>
+                            <span class="block text-sm font-medium text-gray-700 mb-2">AI Backend</span>
+                            <div class="flex space-x-4 mb-4">
+                                <label class="flex items-center">
+                                    <input type="radio" v-model="settings.ai_backend" value="ollama" class="text-blue-600 focus:ring-blue-500">
+                                    <span class="ml-2 text-sm text-gray-700">Ollama</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" v-model="settings.ai_backend" value="llamacpp" class="text-blue-600 focus:ring-blue-500">
+                                    <span class="ml-2 text-sm text-gray-700">Llama.cpp</span>
+                                </label>
                             </div>
                         </div>
-                        <div v-if="availableModels.length > 0">
-                            <label class="block text-sm font-medium text-gray-700">Ollama Model</label>
-                            <select v-model="settings.ollama_model" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
-                                <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
-                            </select>
+
+                        <!-- Ollama Config -->
+                        <div v-if="settings.ai_backend === 'ollama'">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Ollama API URL</label>
+                                <div class="flex space-x-2">
+                                    <input v-model="settings.ollama_url" required class="mt-1 appearance-none rounded-md flex-1 block w-full px-3 py-2 border border-gray-300 sm:text-sm">
+                                    <button type="button" @click="fetchModels(true, 'ollama')" class="mt-1 px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Fetch Models</button>
+                                </div>
+                            </div>
+                            <div v-if="availableModels.length > 0">
+                                <label class="block text-sm font-medium text-gray-700">Ollama Model</label>
+                                <select v-model="settings.ollama_model" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                    <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
+                                </select>
+                            </div>
+                            <div v-else>
+                                <label class="block text-sm font-medium text-gray-700">Ollama Model</label>
+                                <input v-model="settings.ollama_model" required class="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">API Timeout (seconds)</label>
+                                <p class="text-xs text-gray-500 mb-1">Maximum time to wait for the AI to respond.</p>
+                                <input type="number" v-model="settings.ollama_timeout" required min="30" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
+                            </div>
                         </div>
-                        <div v-else>
-                            <label class="block text-sm font-medium text-gray-700">Ollama Model</label>
-                            <input v-model="settings.ollama_model" required class="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">API Timeout (seconds)</label>
-                            <p class="text-xs text-gray-500 mb-1">Maximum time to wait for the AI to respond.</p>
-                            <input type="number" v-model="settings.ollama_timeout" required min="30" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
+
+                        <!-- Llama.cpp Config -->
+                        <div v-if="settings.ai_backend === 'llamacpp'">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Llama.cpp API URL</label>
+                                <div class="flex space-x-2">
+                                    <input v-model="settings.llamacpp_url" required class="mt-1 appearance-none rounded-md flex-1 block w-full px-3 py-2 border border-gray-300 sm:text-sm">
+                                    <button type="button" @click="fetchModels(true, 'llamacpp')" class="mt-1 px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Fetch Models</button>
+                                </div>
+                            </div>
+                            <div v-if="availableModels.length > 0">
+                                <label class="block text-sm font-medium text-gray-700">Llama.cpp Model</label>
+                                <select v-model="settings.llamacpp_model" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
+                                    <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
+                                </select>
+                            </div>
+                            <div v-else>
+                                <label class="block text-sm font-medium text-gray-700">Llama.cpp Model</label>
+                                <input v-model="settings.llamacpp_model" required class="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">API Timeout (seconds)</label>
+                                <p class="text-xs text-gray-500 mb-1">Maximum time to wait for the AI to respond.</p>
+                                <input type="number" v-model="settings.llamacpp_timeout" required min="30" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm">
+                            </div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Max Retries</label>
@@ -218,20 +261,20 @@ export default {
     </div>`,
     components: { LoadingSpinner },
     data() {
-        return { 
-            tab: 'logs', 
-            logs: [], 
-            processingDocs: [], 
-            settings: {}, 
+        return {
+            tab: 'logs',
+            logs: [],
+            processingDocs: [],
+            settings: {},
             serverTimezone: 'UTC',
-            availableModels: [], 
-            availableTags: [], 
-            loading: true, 
-            error: '', 
-            message: '', 
-            paperlessStatus: '', 
-            logInterval: null 
-        }
+            availableModels: [],
+            availableTags: [],
+            loading: true,
+            error: '',
+            message: '',
+            paperlessStatus: '',
+            logInterval: null
+        };
     },
     async mounted() {
         await this.loadData();
@@ -264,7 +307,7 @@ export default {
         async loadData() {
             try {
                 this.loading = true;
-                this.error = "";
+                this.error = '';
                 const [logData, processingData, settingData] = await Promise.all([
                     api.getLogs(),
                     api.getProcessing(),
@@ -299,11 +342,17 @@ export default {
                 this.availableTags = res.tags || [];
 
                 let tagsMissing = false;
-                if (this.settings.query_tag_id && !this.availableTags.some(t => t.id === this.settings.query_tag_id)) {
+                if (
+                    this.settings.query_tag_id &&
+                    !this.availableTags.some((t) => t.id === this.settings.query_tag_id)
+                ) {
                     tagsMissing = true;
                     this.settings.query_tag_id = null;
                 }
-                if (this.settings.force_process_tag_id && !this.availableTags.some(t => t.id === this.settings.force_process_tag_id)) {
+                if (
+                    this.settings.force_process_tag_id &&
+                    !this.availableTags.some((t) => t.id === this.settings.force_process_tag_id)
+                ) {
                     tagsMissing = true;
                     this.settings.force_process_tag_id = null;
                 }
@@ -313,17 +362,26 @@ export default {
                 }
 
                 if (tagsMissing) {
-                    this.error = "Warning: One or more configured tags no longer exist in Paperless. Please update your settings.";
+                    this.error =
+                        'Warning: One or more configured tags no longer exist in Paperless. Please update your settings.';
                 }
             } catch (e) {
                 if (!silent) this.error = 'Paperless connection failed: ' + e.message;
             }
         },
-        async fetchModels(showError = true) {
-            if (!this.settings.ollama_url) return;
+        async fetchModels(showError = true, backend = null) {
+            const activeBackend = backend || this.settings.ai_backend || 'ollama';
+            if (activeBackend === 'llamacpp' && !this.settings.llamacpp_url) return;
+            if (activeBackend === 'ollama' && !this.settings.ollama_url) return;
+
             try {
                 this.error = '';
-                const res = await api.testOllama({ ollama_url: this.settings.ollama_url });
+                let res;
+                if (activeBackend === 'llamacpp') {
+                    res = await api.testLlamacpp({ llamacpp_url: this.settings.llamacpp_url });
+                } else {
+                    res = await api.testOllama({ ollama_url: this.settings.ollama_url });
+                }
                 this.availableModels = res.models;
             } catch (e) {
                 if (showError) this.error = 'Failed to fetch models: ' + e.message;
@@ -355,10 +413,11 @@ export default {
             if (!dateStr) return 'None';
             try {
                 // Ensure naive UTC strings (without 'Z' or '+') are interpreted as UTC
-                const normalizedStr = (typeof dateStr === 'string' && !dateStr.includes('Z') && !dateStr.includes('+')) 
-                    ? dateStr + 'Z' 
-                    : dateStr;
-                    
+                const normalizedStr =
+                    typeof dateStr === 'string' && !dateStr.includes('Z') && !dateStr.includes('+')
+                        ? dateStr + 'Z'
+                        : dateStr;
+
                 const date = new Date(normalizedStr);
                 // sv-SE locale uses YYYY-MM-DD HH:mm:ss format
                 return new Intl.DateTimeFormat('sv-SE', {

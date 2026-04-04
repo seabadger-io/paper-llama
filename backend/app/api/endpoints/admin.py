@@ -14,12 +14,17 @@ from ...db.session import get_db
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+
 class SettingsUpdate(BaseModel):
     paperless_url: str | None = None
     paperless_token: str | None = None
+    ai_backend: str = "ollama"
     ollama_url: str = "http://localhost:11434"
     ollama_model: str | None = None
     ollama_timeout: int = 300
+    llamacpp_url: str = "http://localhost:8080"
+    llamacpp_model: str | None = None
+    llamacpp_timeout: int = 300
     max_retries: int = 3
     update_title: bool = True
     update_correspondent: bool = True
@@ -34,8 +39,10 @@ class SettingsUpdate(BaseModel):
     custom_prompt: str | None = None
     server_timezone: str = "UTC"
 
+
 class SetupStatus(BaseModel):
     is_setup: bool
+
 
 @router.get("/status", response_model=SetupStatus)
 async def get_setup_status(db: AsyncSession = Depends(get_db)):
@@ -50,10 +57,10 @@ async def get_setup_status(db: AsyncSession = Depends(get_db)):
 
     return {"is_setup": has_admin and has_settings}
 
+
 @router.get("/settings", response_model=SettingsUpdate)
 async def get_current_settings(
-    db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db), current_user: AdminUser = Depends(get_current_user)
 ):
     query = select(AppSettings).limit(1)
     result = await db.execute(query)
@@ -65,29 +72,40 @@ async def get_current_settings(
     return SettingsUpdate(
         paperless_url=settings.paperless_url,
         paperless_token=settings.paperless_token,
+        ai_backend=settings.ai_backend if settings.ai_backend is not None else "ollama",
         ollama_url=settings.ollama_url,
         ollama_model=settings.ollama_model,
         ollama_timeout=settings.ollama_timeout if settings.ollama_timeout is not None else 300,
+        llamacpp_url=settings.llamacpp_url
+        if settings.llamacpp_url is not None
+        else "http://localhost:8080",
+        llamacpp_model=settings.llamacpp_model,
+        llamacpp_timeout=settings.llamacpp_timeout
+        if settings.llamacpp_timeout is not None
+        else 300,
         max_retries=settings.max_retries if settings.max_retries is not None else 3,
         update_title=settings.update_title,
         update_correspondent=settings.update_correspondent,
         update_document_type=settings.update_document_type,
         update_tags=settings.update_tags,
-        update_creation_date=settings.update_creation_date if settings.update_creation_date is not None else False,
+        update_creation_date=settings.update_creation_date
+        if settings.update_creation_date is not None
+        else False,
         document_word_limit=settings.document_word_limit,
         schedule_interval_minutes=settings.schedule_interval_minutes,
         remove_query_tag=settings.remove_query_tag,
         query_tag_id=settings.query_tag_id,
         force_process_tag_id=settings.force_process_tag_id,
         custom_prompt=settings.custom_prompt,
-        server_timezone=core_settings.TZ
+        server_timezone=core_settings.TZ,
     )
+
 
 @router.put("/settings")
 async def update_settings(
     settings_data: SettingsUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = Depends(get_current_user)
+    current_user: AdminUser = Depends(get_current_user),
 ):
     query = select(AppSettings).limit(1)
     result = await db.execute(query)
@@ -98,9 +116,13 @@ async def update_settings(
 
     app_settings.paperless_url = settings_data.paperless_url
     app_settings.paperless_token = settings_data.paperless_token
+    app_settings.ai_backend = settings_data.ai_backend
     app_settings.ollama_url = settings_data.ollama_url
     app_settings.ollama_model = settings_data.ollama_model
     app_settings.ollama_timeout = settings_data.ollama_timeout
+    app_settings.llamacpp_url = settings_data.llamacpp_url
+    app_settings.llamacpp_model = settings_data.llamacpp_model
+    app_settings.llamacpp_timeout = settings_data.llamacpp_timeout
     app_settings.max_retries = settings_data.max_retries
     app_settings.update_title = settings_data.update_title
     app_settings.update_correspondent = settings_data.update_correspondent
@@ -121,39 +143,51 @@ async def update_settings(
 
     return {"message": "Settings updated successfully"}
 
+
 @router.post("/trigger")
 async def trigger_processing(
-    background_tasks: BackgroundTasks,
-    current_user: AdminUser = Depends(get_current_user)
+    background_tasks: BackgroundTasks, current_user: AdminUser = Depends(get_current_user)
 ):
     """Manually trigger document processing."""
     background_tasks.add_task(trigger_workflow, from_webhook=True)
     return {"message": "Processing triggered"}
 
+
 @router.get("/processing")
-async def get_processing(db: AsyncSession = Depends(get_db), current_user: AdminUser = Depends(get_current_user)):
+async def get_processing(
+    db: AsyncSession = Depends(get_db), current_user: AdminUser = Depends(get_current_user)
+):
     """Fetch documents currently being processed."""
     query = select(ProcessedDocument).where(ProcessedDocument.status == "processing")
     result = await db.execute(query)
     docs = result.scalars().all()
     return [{"document_id": d.document_id, "started_at": d.processed_at} for d in docs]
 
+
 @router.get("/logs")
 async def get_change_logs(
     limit: int = 50,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = Depends(get_current_user)
+    current_user: AdminUser = Depends(get_current_user),
 ):
     """Fetch the document change logs."""
-    query = select(DocumentChangeLog).order_by(DocumentChangeLog.changed_at.desc()).limit(limit).offset(offset)
+    query = (
+        select(DocumentChangeLog)
+        .order_by(DocumentChangeLog.changed_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
     result = await db.execute(query)
     logs = result.scalars().all()
 
-    return [{
-        "id": log.id,
-        "document_id": log.document_id,
-        "changed_at": log.changed_at,
-        "original_state": log.original_state,
-        "new_state": log.new_state
-    } for log in logs]
+    return [
+        {
+            "id": log.id,
+            "document_id": log.document_id,
+            "changed_at": log.changed_at,
+            "original_state": log.original_state,
+            "new_state": log.new_state,
+        }
+        for log in logs
+    ]

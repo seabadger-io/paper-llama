@@ -10,6 +10,7 @@ vi.mock('../assets/api.js', () => ({
         getSettings: vi.fn(),
         updateSettings: vi.fn(),
         testOllama: vi.fn(),
+        testLlamacpp: vi.fn(),
         testPaperless: vi.fn(),
         triggerProcessing: vi.fn()
     }
@@ -102,6 +103,27 @@ describe('Dashboard Component', () => {
         
         expect(api.updateSettings).toHaveBeenCalledWith(wrapper.vm.settings)
         expect(wrapper.vm.message).toBe('Settings updated successfully.')
+    })
+
+    it('switches between AI backends and tests connection accordingly', async () => {
+        const wrapper = await createWrapper()
+        
+        // Switch to settings
+        await wrapper.setData({ tab: 'settings' })
+        
+        // Switch to llamacpp
+        await wrapper.setData({ settings: { ...wrapper.vm.settings, ai_backend: 'llamacpp', llamacpp_url: 'http://llama:8080' } })
+        
+        // Check UI rendering
+        expect(wrapper.text()).toContain('Llama.cpp API URL')
+        expect(wrapper.text()).not.toContain('Ollama API URL')
+        
+        api.testLlamacpp.mockResolvedValueOnce({ models: ['llama-model'] })
+        
+        await wrapper.vm.fetchModels(true, 'llamacpp')
+        
+        expect(api.testLlamacpp).toHaveBeenCalledWith({ llamacpp_url: 'http://llama:8080' })
+        expect(wrapper.vm.availableModels).toEqual(['llama-model'])
     })
 
     it('triggers manual processing and shows alert', async () => {

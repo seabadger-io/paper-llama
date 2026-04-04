@@ -28,9 +28,11 @@ class MockDB:
     async def rollback(self):
         self.rollback_called_count += 1
 
+
 @pytest.fixture
 def mock_db_session():
     return MockDB()
+
 
 @pytest.fixture
 def mock_settings():
@@ -50,6 +52,7 @@ def mock_settings():
     settings.document_word_limit = 1500
     return settings
 
+
 @pytest.fixture
 def processor(mock_db_session, mock_settings):
     # Reset cache before each test
@@ -60,6 +63,7 @@ def processor(mock_db_session, mock_settings):
     proc.paperless = AsyncMock()
     proc.ollama = AsyncMock()
     return proc
+
 
 @pytest.mark.asyncio
 async def test_get_cached_metadata_fetches_once(processor):
@@ -77,10 +81,14 @@ async def test_get_cached_metadata_fetches_once(processor):
     assert processor.paperless.get_tags.call_count == 1
     assert t1 == t2
 
+
 @pytest.mark.asyncio
 async def test_process_document_success(processor, mocker):
     DocumentProcessor._metadata_cache["timestamp"] = 9999999999
-    DocumentProcessor._metadata_cache["tags"] = [{"id": 1, "name": "inbox"}, {"id": 2, "name": "receipt"}]
+    DocumentProcessor._metadata_cache["tags"] = [
+        {"id": 1, "name": "inbox"},
+        {"id": 2, "name": "receipt"},
+    ]
     DocumentProcessor._metadata_cache["correspondents"] = [{"id": 1, "name": "Apple"}]
     DocumentProcessor._metadata_cache["document_types"] = []
 
@@ -91,17 +99,17 @@ async def test_process_document_success(processor, mocker):
         "tags": [1],
         "correspondent": None,
         "document_type": None,
-        "created": "2023-01-01"
+        "created": "2023-01-01",
     }
 
-    processor.ollama.generate_completion.return_value = '''```json
+    processor.ollama.generate_completion.return_value = """```json
     {
         "title": "Apple Receipt",
         "correspondent_id": 1,
         "tag_ids": [2],
         "created": "2023-01-02"
     }
-    ```'''
+    ```"""
 
     await processor.process_document(100)
 
@@ -111,11 +119,12 @@ async def test_process_document_success(processor, mocker):
         tags=[2],
         correspondent_id=1,
         document_type_id=None,
-        created="2023-01-02"
+        created="2023-01-02",
     )
 
     assert processor.db.add_called_count == 3
     assert processor.db.commit_called_count == 3
+
 
 @pytest.mark.asyncio
 async def test_process_document_force_tag_removal(processor, mock_settings):
@@ -133,10 +142,12 @@ async def test_process_document_force_tag_removal(processor, mock_settings):
         "tags": [99],
         "correspondent": None,
         "document_type": None,
-        "created": "2023-01-01"
+        "created": "2023-01-01",
     }
 
-    processor.ollama.generate_completion.return_value = '{"title": "Test Doc", "tag_ids": [], "created": "2023-01-02"}'
+    processor.ollama.generate_completion.return_value = (
+        '{"title": "Test Doc", "tag_ids": [], "created": "2023-01-02"}'
+    )
 
     await processor.process_document(100)
 
@@ -146,8 +157,9 @@ async def test_process_document_force_tag_removal(processor, mock_settings):
         tags=[],
         correspondent_id=None,
         document_type_id=None,
-        created="2023-01-02"
+        created="2023-01-02",
     )
+
 
 @pytest.mark.asyncio
 async def test_process_document_retry_error(processor, mock_settings, mocker):
@@ -165,17 +177,21 @@ async def test_process_document_retry_error(processor, mock_settings, mocker):
         "tags": [1],
         "correspondent": None,
         "document_type": None,
-        "created": "2023-01-01"
+        "created": "2023-01-01",
     }
 
     # Force completion logic error
     processor.ollama.generate_completion.side_effect = Exception("Ollama disconnected")
-    mock_sleep = mocker.patch("backend.app.services.processor.asyncio.sleep", new_callable=AsyncMock)
+    mock_sleep = mocker.patch(
+        "backend.app.services.processor.asyncio.sleep", new_callable=AsyncMock
+    )
 
     await processor.process_document(100)
 
     # Asserts
     assert processor.ollama.generate_completion.call_count == 2
     mock_sleep.assert_called_once_with(2)
-    assert processor.db.add_called_count == 3 # 1 processing log, 1 error lock log, 1 changelog max_retries
+    assert (
+        processor.db.add_called_count == 3
+    )  # 1 processing log, 1 error lock log, 1 changelog max_retries
     assert processor.db.rollback_called_count == 1

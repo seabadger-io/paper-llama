@@ -25,7 +25,9 @@ export default {
             </form>
         </div>
     </div>`,
-    data() { return { username: '', password: '', error: '', loading: false } },
+    data() {
+        return { username: '', password: '', error: '', loading: false };
+    },
     async mounted() {
         try {
             const status = await api.getStatus();
