@@ -1,6 +1,20 @@
 import { api } from '../api.js';
+import { settingsMixin } from '../mixins/settingsMixin.js';
+import PaperlessSettings from '../components/PaperlessSettings.js';
+import AIBackendSettings from '../components/AIBackendSettings.js';
+import CapabilitiesSettings from '../components/CapabilitiesSettings.js';
+import MetadataPermissionsSettings from '../components/MetadataPermissionsSettings.js';
+import DocumentQuerySettings from '../components/DocumentQuerySettings.js';
 
 export default {
+    components: {
+        'paperless-settings': PaperlessSettings,
+        'ai-backend-settings': AIBackendSettings,
+        'capabilities-settings': CapabilitiesSettings,
+        'metadata-permissions-settings': MetadataPermissionsSettings,
+        'document-query-settings': DocumentQuerySettings
+    },
+    mixins: [settingsMixin],
     template: `
     <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div class="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg border border-gray-100">
@@ -13,299 +27,67 @@ export default {
                 <div v-if="error" class="bg-red-50 text-red-500 p-3 rounded-md text-sm border border-red-200">{{ error }}</div>
                 
                 <!-- Admin Credentials -->
-                <div class="border-b border-gray-200 pb-4">
+                <div class="pb-4">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Admin Account</h3>
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Username</label>
-                            <input v-model="form.username" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <input v-model="settings.username" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Password</label>
-                            <input type="password" v-model="form.password" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <input type="password" v-model="settings.password" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Confirm Password</label>
                             <input type="password" v-model="confirm_password" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                            <p v-if="form.password !== confirm_password && confirm_password" class="mt-1 text-sm text-red-600">Passwords do not match.</p>
+                            <p v-if="settings.password !== confirm_password && confirm_password" class="mt-1 text-sm text-red-600">Passwords do not match.</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Paperless Config -->
-                <div class="border-b border-gray-200 pb-4">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Paperless NGX</h3>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Base URL (e.g. http://192.168.1.100:8000)</label>
-                            <input v-model="form.paperless_url" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">API Token</label>
-                            <input type="password" v-model="form.paperless_token" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                        </div>
-                        <button type="button" @click="testPaperless" class="w-full justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Test Paperless Connection</button>
-                        <div v-if="paperlessStatus" class="text-sm text-green-600">{{ paperlessStatus }}</div>
-                    </div>
+                <!-- Paperless Section -->
+                <div class="border-t border-gray-100 pt-6">
+                    <paperless-settings 
+                        v-model="settings" 
+                        :paperless-status="paperlessStatus" 
+                        :available-tags="availableTags"
+                        @test="testPaperless(false)"
+                    />
+                </div>
+                
+                <!-- AI Backend Section -->
+                <div class="border-t border-gray-100 pt-6">
+                    <ai-backend-settings 
+                        v-model="settings" 
+                        :available-models="availableModels"
+                        @fetch-models="(b) => fetchModels(b)"
+                    />
+                </div>
+                
+                <!-- AI Capabilities Section -->
+                <div class="border-t border-gray-100 pt-6">
+                    <capabilities-settings 
+                        v-model="settings" 
+                        :available-tags="availableTags"
+                    />
+                </div>
+                
+                <!-- Metadata Permissions Section -->
+                <div class="border-t border-gray-100 pt-6">
+                    <metadata-permissions-settings 
+                        v-model="settings" 
+                        :available-users="availableUsers" 
+                        :available-groups="availableGroups"
+                    />
                 </div>
 
-                <!-- AI Backend Selection -->
-                <div class="border-b border-gray-200 pb-4">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">AI Backend</h3>
-                    <div class="flex space-x-4 mb-4">
-                        <label class="flex items-center">
-                            <input type="radio" v-model="form.ai_backend" value="ollama" class="text-blue-600 focus:ring-blue-500">
-                            <span class="ml-2 text-sm text-gray-700">Ollama</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="radio" v-model="form.ai_backend" value="llamacpp" class="text-blue-600 focus:ring-blue-500">
-                            <span class="ml-2 text-sm text-gray-700">Llama.cpp</span>
-                        </label>
-                    </div>
-
-                    <!-- Ollama Config -->
-                    <div v-if="form.ai_backend === 'ollama'" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Ollama API URL (e.g. http://localhost:11434)</label>
-                            <input v-model="form.ollama_url" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">API Timeout (seconds)</label>
-                            <p class="text-xs text-gray-500 mb-1">Maximum time to wait for the AI to respond.</p>
-                            <input type="number" v-model="form.ollama_timeout" required min="30" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Max Retries</label>
-                            <p class="text-xs text-gray-500 mb-1">Number of retries per cycle if saving fails.</p>
-                            <input type="number" v-model="form.max_retries" required min="1" max="10" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                        </div>
-                        <button type="button" @click="fetchModels('ollama')" class="w-full justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Test & Fetch Models</button>
-                        
-                        <div v-if="availableModels.length > 0">
-                            <label class="block text-sm font-medium text-gray-700">Select Model</label>
-                            <select v-model="form.ollama_model" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
-                                <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Llama.cpp Config -->
-                    <div v-if="form.ai_backend === 'llamacpp'" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Llama.cpp API URL (e.g. http://localhost:8080)</label>
-                            <input v-model="form.llamacpp_url" required class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">API Timeout (seconds)</label>
-                            <p class="text-xs text-gray-500 mb-1">Maximum time to wait for the AI to respond.</p>
-                            <input type="number" v-model="form.llamacpp_timeout" required min="30" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Max Retries</label>
-                            <p class="text-xs text-gray-500 mb-1">Number of retries per cycle if saving fails.</p>
-                            <input type="number" v-model="form.max_retries" required min="1" max="10" class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
-                        </div>
-                        <button type="button" @click="fetchModels('llamacpp')" class="w-full justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">Test & Fetch Models</button>
-                        
-                        <div v-if="availableModels.length > 0">
-                            <label class="block text-sm font-medium text-gray-700">Select Model</label>
-                            <select v-model="form.llamacpp_model" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
-                                <option v-for="m in availableModels" :key="m" :value="m">{{ m }}</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- App Config -->
-                <div>
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Processing Settings</h3>
-                    <div class="space-y-4">
-                        <div>
-                            <span class="block text-sm font-medium text-gray-700 mb-2">AI Capabilities</span>
-                            <div class="flex items-center mt-2">
-                                <input id="wiz_update_title" type="checkbox" v-model="form.update_title" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                <label for="wiz_update_title" class="ml-2 block text-sm text-gray-900">Update Title</label>
-                            </div>
-                            <div class="flex items-center mt-2">
-                                <input id="wiz_update_corr" type="checkbox" v-model="form.update_correspondent" @change="form.generate_correspondent = form.update_correspondent && form.generate_correspondent" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                <label for="wiz_update_corr" class="ml-2 block text-sm text-gray-900">Update Correspondent</label>
-                            </div>
-                            <div class="flex items-center mt-1 ml-6" :class="{ 'opacity-50': !form.update_correspondent }">
-                                <input id="wiz_gen_corr" type="checkbox" v-model="form.generate_correspondent" :disabled="!form.update_correspondent" class="h-3 w-3 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
-                                <label for="wiz_gen_corr" class="ml-2 block text-xs text-gray-700">Allow AI generation</label>
-                            </div>
-
-                            <div class="flex items-center mt-2">
-                                <input id="wiz_update_type" type="checkbox" v-model="form.update_document_type" @change="form.generate_document_type = form.update_document_type && form.generate_document_type" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                <label for="wiz_update_type" class="ml-2 block text-sm text-gray-900">Update Document Type</label>
-                            </div>
-                            <div class="flex items-center mt-1 ml-6" :class="{ 'opacity-50': !form.update_document_type }">
-                                <input id="wiz_gen_type" type="checkbox" v-model="form.generate_document_type" :disabled="!form.update_document_type" class="h-3 w-3 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
-                                <label for="wiz_gen_type" class="ml-2 block text-xs text-gray-700">Allow AI generation</label>
-                            </div>
-
-                            <div class="flex flex-col mt-2">
-                                <div class="flex items-center">
-                                    <input id="wiz_update_tags" type="checkbox" v-model="form.update_tags" @change="form.generate_tags = form.update_tags && form.generate_tags" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                    <label for="wiz_update_tags" class="ml-2 block text-sm text-gray-900">Update Tags</label>
-                                    <div v-if="form.update_tags" class="ml-4 flex items-center">
-                                        <label for="wiz_max_tags" class="mr-2 text-xs text-gray-600">Maximum tags:</label>
-                                        <input id="wiz_max_tags" type="number" v-model="form.max_tags" min="1" max="50" class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                    </div>
-                                </div>
-                                <div class="flex items-center mt-1 ml-6" :class="{ 'opacity-50': !form.update_tags }">
-                                    <input id="wiz_gen_tags" type="checkbox" v-model="form.generate_tags" :disabled="!form.update_tags" class="h-3 w-3 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
-                                    <label for="wiz_gen_tags" class="ml-2 block text-xs text-gray-700">Allow AI generation</label>
-                                </div>
-                            </div>
-
-                            <div class="flex items-center mt-2">
-                                <input id="wiz_update_created" type="checkbox" v-model="form.update_creation_date" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                <label for="wiz_update_created" class="ml-2 block text-sm text-gray-900">Update Creation Date</label>
-                            </div>
-                        </div>
-
-                        <!-- Metadata Permissions -->
-                        <div class="border-t pt-4 mt-4">
-                            <h3 class="text-lg font-medium text-gray-900 mb-4">Metadata Permissions</h3>
-                            <p class="text-xs text-gray-500 mb-4 italic">Applied ONLY when Paperless Llama creates new Tags, Correspondents, or Document Types.</p>
-                            
-                            <div class="flex items-center mb-4">
-                                <input id="wiz_use_defaults" type="checkbox" v-model="form.metadata_use_system_defaults" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                <label for="wiz_use_defaults" class="ml-2 block text-sm text-gray-900">Use System Defaults</label>
-                            </div>
-
-                            <div v-if="!form.metadata_use_system_defaults">
-                                <div class="mb-4">
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Metadata Owner</label>
-                                    <select v-model="form.metadata_owner_id" class="block w-full pl-3 pr-10 py-2 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md shadow-sm sm:text-sm">
-                                        <option :value="null">None (Public)</option>
-                                        <option :value="-1">Document Owner</option>
-                                        <optgroup label="Specific User">
-                                            <option v-for="user in availableUsers" :key="user.id" :value="user.id">{{ user.username }} ({{ user.full_name || 'No name' }})</option>
-                                        </optgroup>
-                                    </select>
-                                </div>
-
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <!-- View Permissions -->
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">View Permissions</label>
-                                    
-                                    <!-- View Users -->
-                                    <div class="mb-3">
-                                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">View Users</label>
-                                        <select @change="addPermission('metadata_view_users', $event)" class="block w-full pl-3 pr-10 py-1.5 text-xs border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white shadow-sm">
-                                            <option value="">Add User...</option>
-                                            <option v-for="user in filteredOptions('user', form.metadata_view_users)" :key="user.id" :value="user.id">{{ user.username }}</option>
-                                        </select>
-                                        <div class="flex flex-wrap gap-1.5 mt-2">
-                                            <span v-for="id in form.metadata_view_users" :key="id" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                                                {{ resolveName('user', id) }}
-                                                <button type="button" @click="removePermission('metadata_view_users', id)" class="ml-1 inline-flex items-center p-0.5 hover:bg-blue-200 rounded-full text-blue-400 hover:text-blue-600 focus:outline-none">
-                                                    <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                                </button>
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <!-- View Groups -->
-                                    <div>
-                                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">View Groups</label>
-                                        <select @change="addPermission('metadata_view_groups', $event)" class="block w-full pl-3 pr-10 py-1.5 text-xs border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white shadow-sm">
-                                            <option value="">Add Group...</option>
-                                            <option v-for="group in filteredOptions('group', form.metadata_view_groups)" :key="group.id" :value="group.id">{{ group.name }}</option>
-                                        </select>
-                                        <div class="flex flex-wrap gap-1.5 mt-2">
-                                            <span v-for="id in form.metadata_view_groups" :key="id" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
-                                                {{ resolveName('group', id) }}
-                                                <button type="button" @click="removePermission('metadata_view_groups', id)" class="ml-1 inline-flex items-center p-0.5 hover:bg-purple-200 rounded-full text-purple-400 hover:text-purple-600 focus:outline-none">
-                                                    <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                                </button>
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Edit Permissions -->
-                                <div>
-                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Edit Permissions</label>
-                                    
-                                    <!-- Edit Users -->
-                                    <div class="mb-3">
-                                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">Edit Users</label>
-                                        <select @change="addPermission('metadata_edit_users', $event)" class="block w-full pl-3 pr-10 py-1.5 text-xs border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white shadow-sm">
-                                            <option value="">Add User...</option>
-                                            <option v-for="user in filteredOptions('user', form.metadata_edit_users)" :key="user.id" :value="user.id">{{ user.username }}</option>
-                                        </select>
-                                        <div class="flex flex-wrap gap-1.5 mt-2">
-                                            <span v-for="id in form.metadata_edit_users" :key="id" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                                                {{ resolveName('user', id) }}
-                                                <button type="button" @click="removePermission('metadata_edit_users', id)" class="ml-1 inline-flex items-center p-0.5 hover:bg-blue-200 rounded-full text-blue-400 hover:text-blue-600 focus:outline-none">
-                                                    <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                                </button>
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <!-- Edit Groups -->
-                                    <div>
-                                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">Edit Groups</label>
-                                        <select @change="addPermission('metadata_edit_groups', $event)" class="block w-full pl-3 pr-10 py-1.5 text-xs border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white shadow-sm">
-                                            <option value="">Add Group...</option>
-                                            <option v-for="group in filteredOptions('group', form.metadata_edit_groups)" :key="group.id" :value="group.id">{{ group.name }}</option>
-                                        </select>
-                                        <div class="flex flex-wrap gap-1.5 mt-2">
-                                            <span v-for="id in form.metadata_edit_groups" :key="id" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
-                                                {{ resolveName('group', id) }}
-                                                <button type="button" @click="removePermission('metadata_edit_groups', id)" class="ml-1 inline-flex items-center p-0.5 hover:bg-purple-200 rounded-full text-purple-400 hover:text-purple-600 focus:outline-none">
-                                                    <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                                                </button>
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Custom Instructions</label>
-                            <p class="text-xs text-gray-500 mb-1">Optional. Add custom instructions for the AI prompt (e.g. "Be very concise").</p>
-                            <textarea v-model="form.custom_prompt" rows="3" class="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm"></textarea>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Document Word Limit</label>
-                            <p class="text-xs text-gray-500 mb-1">Max words to send to AI (0 = unlimited).</p>
-                            <input type="number" v-model="form.document_word_limit" required min="0" class="appearance-none rounded-md flex-1 block w-full px-3 py-2 border border-gray-300 sm:text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Schedule Interval (minutes)</label>
-                            <p class="text-xs text-gray-500 mb-1">Set to 0 to disable background scheduling (trigger processing manually or via webhook only).</p>
-                            <input type="number" v-model="form.schedule_interval_minutes" required min="0" class="appearance-none rounded-md flex-1 block w-full px-3 py-2 border border-gray-300 sm:text-sm">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Query Tag</label>
-                            <p class="text-xs text-gray-500 mb-1">Tag used to poll for unprocessed documents.</p>
-                            <select v-model="form.query_tag_id" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
-                                <option :value="null">None</option>
-                                <option v-for="t in availableTags" :key="t.id" :value="t.id">{{ t.name }}</option>
-                            </select>
-                        </div>
-                        <div class="flex items-center mt-2 mb-4">
-                            <input id="wiz_remove_query_tag" type="checkbox" v-model="form.remove_query_tag" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <label for="wiz_remove_query_tag" class="ml-2 block text-sm text-gray-900">Remove query tag after processing</label>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700">Force Process Tag</label>
-                            <p class="text-xs text-gray-500 mb-1">Tag that forces processing of a document even if it was previously processed.</p>
-                            <select v-model="form.force_process_tag_id" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md">
-                                <option :value="null">None</option>
-                                <option v-for="t in availableTags" :key="t.id" :value="t.id">{{ t.name }}</option>
-                            </select>
-                        </div>
-                    </div>
+                <!-- Document Query & Scheduling Section -->
+                <div class="border-t border-gray-100 pt-6">
+                    <document-query-settings 
+                        v-model="settings" 
+                        :available-tags="availableTags"
+                    />
                 </div>
 
                 <div>
@@ -319,7 +101,7 @@ export default {
     </div>`,
     data() {
         return {
-            form: {
+            settings: {
                 username: 'admin',
                 password: '',
                 paperless_url: '',
@@ -364,88 +146,22 @@ export default {
     },
     computed: {
         passwordMismatch() {
-            return this.form.password !== this.confirm_password && this.confirm_password !== '';
+            return this.settings.password !== this.confirm_password && this.confirm_password !== '';
         }
     },
     methods: {
-        async fetchModels(backend) {
-            try {
-                this.error = '';
-                this.availableModels = [];
-                let res;
-                if (backend === 'llamacpp') {
-                    res = await api.testLlamacpp({ llamacpp_url: this.form.llamacpp_url });
-                    this.availableModels = res.models;
-                    if (this.availableModels.length > 0) {
-                        this.form.llamacpp_model = this.availableModels[0];
-                    }
-                } else {
-                    res = await api.testOllama({ ollama_url: this.form.ollama_url });
-                    this.availableModels = res.models;
-                    if (this.availableModels.length > 0) {
-                        this.form.ollama_model = this.availableModels[0];
-                    }
-                }
-            } catch (e) {
-                this.error = 'Failed to fetch models: ' + e.message;
-            }
-        },
-        async testPaperless() {
-            try {
-                this.error = '';
-                this.paperlessStatus = '';
-                const res = await api.testPaperless({
-                    paperless_url: this.form.paperless_url,
-                    paperless_token: this.form.paperless_token
-                });
-                this.availableTags = res.tags || [];
-                this.availableUsers = res.users || [];
-                this.availableGroups = res.groups || [];
-                this.paperlessStatus = `Connection successful! Found ${res.tags_count} tags, ${this.availableUsers.length} users, ${this.availableGroups.length} groups.`;
-            } catch (e) {
-                this.error = 'Paperless connection failed: ' + e.message;
-            }
-        },
         async submitSetup() {
             if (this.passwordMismatch) return;
             try {
                 this.loading = true;
                 this.error = '';
-                await api.runSetup(this.form);
+                await api.runSetup(this.settings);
                 this.$router.push('/login');
             } catch (e) {
                 this.error = 'Setup failed: ' + e.message;
             } finally {
                 this.loading = false;
             }
-        },
-        resolveName(type, id) {
-            if (type === 'user') {
-                const user = this.availableUsers.find((u) => u.id === id);
-                return user ? user.username : id;
-            } else if (type === 'group') {
-                const group = this.availableGroups.find((g) => g.id === id);
-                return group ? group.name : id;
-            }
-            return id;
-        },
-        addPermission(collection, event) {
-            const id = parseInt(event.target.value);
-            if (id && !this.form[collection].includes(id)) {
-                this.form[collection].push(id);
-            }
-            event.target.value = ''; // Reset select
-        },
-        removePermission(collection, id) {
-            this.form[collection] = this.form[collection].filter((i) => i !== id);
-        },
-        filteredOptions(type, currentSelection) {
-            if (type === 'user') {
-                return this.availableUsers.filter((u) => !currentSelection.includes(u.id));
-            } else if (type === 'group') {
-                return this.availableGroups.filter((g) => !currentSelection.includes(g.id));
-            }
-            return [];
         }
     }
 };

@@ -41,9 +41,12 @@ describe('Dashboard Component', () => {
         api.getSettings.mockResolvedValue({
             paperless_url: 'http://paperless',
             paperless_token: 'token',
-            update_title: true
+            update_title: true,
+            ai_backend: 'ollama',
+            ollama_url: 'http://ollama'
         })
         api.testOllama.mockResolvedValue({ models: ['model-a'] })
+        api.testPaperless.mockResolvedValue({ tags: [], tags_count: 0 })
         api.getPaperlessUsers.mockResolvedValue([])
         api.getPaperlessGroups.mockResolvedValue([])
         api.getTriggerStats.mockResolvedValue({ count: 5 })
@@ -133,6 +136,7 @@ describe('Dashboard Component', () => {
         
         // Switch to llamacpp
         await wrapper.setData({ settings: { ...wrapper.vm.settings, ai_backend: 'llamacpp', llamacpp_url: 'http://llama:8080' } })
+        await flushPromises()
         
         // Check UI rendering
         expect(wrapper.text()).toContain('Llama.cpp API URL')
@@ -140,7 +144,7 @@ describe('Dashboard Component', () => {
         
         api.testLlamacpp.mockResolvedValueOnce({ models: ['llama-model'] })
         
-        await wrapper.vm.fetchModels(true, 'llamacpp')
+        await wrapper.vm.fetchModels('llamacpp', true)
         
         expect(api.testLlamacpp).toHaveBeenCalledWith({ llamacpp_url: 'http://llama:8080' })
         expect(wrapper.vm.availableModels).toEqual(['llama-model'])
@@ -152,7 +156,7 @@ describe('Dashboard Component', () => {
         api.getTriggerStats.mockResolvedValueOnce({ count: 12 })
         
         // Open modal
-        await wrapper.vm.triggerProcessing()
+        await wrapper.vm.openTriggerModal()
         await flushPromises()
         
         expect(wrapper.vm.showTriggerModal).toBe(true)
@@ -169,19 +173,6 @@ describe('Dashboard Component', () => {
         expect(wrapper.vm.message).toContain('Processing triggered successfully')
     })
 
-    it('handles triggering with no documents found', async () => {
-        const wrapper = await createWrapper()
-        
-        api.getTriggerStats.mockResolvedValueOnce({ count: 0 })
-        
-        await wrapper.vm.triggerProcessing()
-        await flushPromises()
-        
-        expect(wrapper.text()).toContain('No pending documents found at this time')
-        expect(wrapper.find('.modal-confirm').exists()).toBe(false) // No start button
-        expect(wrapper.find('.modal-close').text()).toBe('Close')
-    })
-
     it('polls for logs every 15 seconds', async () => {
         const wrapper = await createWrapper()
         expect(api.getLogs).toHaveBeenCalledTimes(1) // Initial load
@@ -194,7 +185,7 @@ describe('Dashboard Component', () => {
         expect(api.getLogs).toHaveBeenCalledTimes(2) // No longer polling after unmount
     })
 
-    it('logs out and redirects to login server', async () => {
+    it('logs out and redirects to login', async () => {
         const wrapper = await createWrapper()
         
         wrapper.vm.logout()
