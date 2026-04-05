@@ -14,7 +14,8 @@ vi.mock('../assets/api.js', () => ({
         testPaperless: vi.fn(),
         getPaperlessUsers: vi.fn(),
         getPaperlessGroups: vi.fn(),
-        triggerProcessing: vi.fn()
+        triggerProcessing: vi.fn(),
+        getTriggerStats: vi.fn()
     }
 }))
 
@@ -45,6 +46,7 @@ describe('Dashboard Component', () => {
         api.testOllama.mockResolvedValue({ models: ['model-a'] })
         api.getPaperlessUsers.mockResolvedValue([])
         api.getPaperlessGroups.mockResolvedValue([])
+        api.getTriggerStats.mockResolvedValue({ count: 5 })
     })
     
     afterEach(() => {
@@ -144,14 +146,40 @@ describe('Dashboard Component', () => {
         expect(wrapper.vm.availableModels).toEqual(['llama-model'])
     })
 
-    it('triggers manual processing and shows alert', async () => {
+    it('renders the trigger processing modal with correct count', async () => {
         const wrapper = await createWrapper()
         
-        api.triggerProcessing.mockResolvedValueOnce({})
+        api.getTriggerStats.mockResolvedValueOnce({ count: 12 })
+        
+        // Open modal
         await wrapper.vm.triggerProcessing()
+        await flushPromises()
+        
+        expect(wrapper.vm.showTriggerModal).toBe(true)
+        expect(wrapper.vm.pendingCount).toBe(12)
+        expect(wrapper.text()).toContain('Found 12 documents waiting to be processed')
+        
+        // Confirm trigger
+        api.triggerProcessing.mockResolvedValueOnce({})
+        await wrapper.find('.modal-confirm').trigger('click')
+        await flushPromises()
         
         expect(api.triggerProcessing).toHaveBeenCalled()
-        expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Processing triggered!'))
+        expect(wrapper.vm.showTriggerModal).toBe(false)
+        expect(wrapper.vm.message).toContain('Processing triggered successfully')
+    })
+
+    it('handles triggering with no documents found', async () => {
+        const wrapper = await createWrapper()
+        
+        api.getTriggerStats.mockResolvedValueOnce({ count: 0 })
+        
+        await wrapper.vm.triggerProcessing()
+        await flushPromises()
+        
+        expect(wrapper.text()).toContain('No pending documents found at this time')
+        expect(wrapper.find('.modal-confirm').exists()).toBe(false) // No start button
+        expect(wrapper.find('.modal-close').text()).toBe('Close')
     })
 
     it('polls for logs every 15 seconds', async () => {

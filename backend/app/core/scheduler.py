@@ -18,6 +18,57 @@ processing_queued = False
 processing_lock = asyncio.Lock()
 
 
+async def get_pending_documents_count() -> int:
+    """Calculates the number of documents currently waiting for processing."""
+    async with AsyncSessionLocal() as session:
+        # Load settings
+        query = select(AppSettings).limit(1)
+        result = await session.execute(query)
+        settings = result.scalar_one_or_none()
+
+        if not settings or not settings.paperless_url or not settings.paperless_token:
+            return 0
+
+        # We need processing state from DB to avoid re-processing and handle retries
+        proc_query = select(
+            ProcessedDocument.document_id, ProcessedDocument.status, ProcessedDocument.processed_at
+        )
+        proc_result = await session.execute(proc_query)
+        processed_data = {
+            row.document_id: (row.status, row.processed_at) for row in proc_result.all()
+        }
+
+        processor = DocumentProcessor(db_session=session, settings=settings)
+
+        # First fetch tags to map the force_process_tag to its ID
+        system_tags, _, _ = await processor.get_cached_metadata()
+        force_tag_id = settings.force_process_tag_id
+
+        # Query documents from paperless
+        tags_filter = [settings.query_tag_id] if settings.query_tag_id else None
+        documents = await processor.paperless.get_documents(tags=tags_filter)
+
+        count = 0
+        for doc in documents:
+            doc_id = doc.get("id")
+            doc_tags = doc.get("tags", [])
+            status_info = processed_data.get(doc_id)
+            status, processed_at = status_info if status_info else (None, None)
+
+            if status == "success":
+                if force_tag_id and force_tag_id in doc_tags:
+                    count += 1
+            elif status == "error":
+                count += 1
+            elif status == "processing":
+                # Check for staleness (e.g., 30 minutes)
+                if processed_at and datetime.now(UTC) - processed_at > timedelta(minutes=30):
+                    count += 1
+            else:
+                count += 1
+        return count
+
+
 async def _run_processing_cycle():
     """The core logic that queries paperless for new documents and processes them."""
     logger.info("Running document check cycle...")

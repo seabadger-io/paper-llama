@@ -67,5 +67,8 @@ export const api = {
     },
     triggerProcessing() {
         return this.request('/admin/trigger', 'POST', null, true);
+    },
+    getTriggerStats() {
+        return this.request('/admin/trigger/stats', 'GET', null, true);
     }
 };

@@ -7,7 +7,7 @@ from sqlalchemy.future import select
 
 from ...api.deps import get_current_user
 from ...core.config import settings as core_settings
-from ...core.scheduler import trigger_workflow, update_scheduler
+from ...core.scheduler import get_pending_documents_count, trigger_workflow, update_scheduler
 from ...db.models import AdminUser, AppSettings, DocumentChangeLog, ProcessedDocument
 from ...db.session import get_db
 
@@ -178,6 +178,13 @@ async def update_settings(
     update_scheduler(app_settings.schedule_interval_minutes)
 
     return {"message": "Settings updated successfully"}
+
+
+@router.get("/trigger/stats")
+async def get_trigger_stats(current_user: AdminUser = Depends(get_current_user)):
+    """Get statistics about the documents pending processing."""
+    count = await get_pending_documents_count()
+    return {"count": count}
 
 
 @router.post("/trigger")
