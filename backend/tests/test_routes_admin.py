@@ -91,6 +91,8 @@ async def test_get_current_settings_handles_none_for_creation_date():
     result = await get_current_settings(db=mock_db, current_user=mock_user)
     assert result.update_creation_date is False
     assert result.ollama_timeout == 300
+    assert result.max_tags == 5
+    assert result.enable_ai_metadata_creation is False
 
 
 @pytest.mark.asyncio

@@ -31,6 +31,7 @@ class SettingsUpdate(BaseModel):
     update_document_type: bool = True
     update_tags: bool = True
     max_tags: int = 5
+    enable_ai_metadata_creation: bool = False
     update_creation_date: bool = False
     document_word_limit: int = 1500
     schedule_interval_minutes: int = 0
@@ -89,6 +90,10 @@ async def get_current_settings(
         update_correspondent=settings.update_correspondent,
         update_document_type=settings.update_document_type,
         update_tags=settings.update_tags,
+        max_tags=settings.max_tags if settings.max_tags is not None else 5,
+        enable_ai_metadata_creation=settings.enable_ai_metadata_creation
+        if settings.enable_ai_metadata_creation is not None
+        else False,
         update_creation_date=settings.update_creation_date
         if settings.update_creation_date is not None
         else False,
@@ -129,6 +134,8 @@ async def update_settings(
     app_settings.update_correspondent = settings_data.update_correspondent
     app_settings.update_document_type = settings_data.update_document_type
     app_settings.update_tags = settings_data.update_tags
+    app_settings.max_tags = settings_data.max_tags
+    app_settings.enable_ai_metadata_creation = settings_data.enable_ai_metadata_creation
     app_settings.update_creation_date = settings_data.update_creation_date
     app_settings.document_word_limit = settings_data.document_word_limit
     app_settings.schedule_interval_minutes = settings_data.schedule_interval_minutes

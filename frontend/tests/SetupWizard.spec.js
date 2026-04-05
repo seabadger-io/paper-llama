@@ -103,10 +103,17 @@ describe('SetupWizard Component', () => {
         const wrapper = createWrapper()
         api.runSetup.mockResolvedValueOnce({})
         
+        // Change one of the new fields to non-default
+        wrapper.vm.form.enable_ai_metadata_creation = true
+        wrapper.vm.form.max_tags = 10
+        
         await wrapper.vm.submitSetup()
         
         expect(wrapper.vm.loading).toBe(false)
-        expect(api.runSetup).toHaveBeenCalledWith(wrapper.vm.form)
+        expect(api.runSetup).toHaveBeenCalledWith(expect.objectContaining({
+            enable_ai_metadata_creation: true,
+            max_tags: 10
+        }))
         expect(mockRouter.push).toHaveBeenCalledWith('/login')
     })
 })

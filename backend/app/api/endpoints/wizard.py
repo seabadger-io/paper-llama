@@ -47,6 +47,7 @@ class SetupWizardRequest(BaseModel):
     update_document_type: bool = True
     update_tags: bool = True
     max_tags: int = 5
+    enable_ai_metadata_creation: bool = False
     update_creation_date: bool = False
     document_word_limit: int = 1500
     schedule_interval_minutes: int
@@ -88,6 +89,8 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         update_correspondent=request.update_correspondent,
         update_document_type=request.update_document_type,
         update_tags=request.update_tags,
+        max_tags=request.max_tags,
+        enable_ai_metadata_creation=request.enable_ai_metadata_creation,
         update_creation_date=request.update_creation_date,
         document_word_limit=request.document_word_limit,
         schedule_interval_minutes=request.schedule_interval_minutes,

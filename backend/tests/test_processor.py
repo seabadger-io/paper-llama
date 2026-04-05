@@ -46,6 +46,8 @@ def mock_settings():
     settings.update_tags = True
     settings.update_correspondent = True
     settings.update_creation_date = True
+    settings.max_tags = 5
+    settings.enable_ai_metadata_creation = False
     settings.remove_query_tag = True
     settings.query_tag_id = 1
     settings.force_process_tag_id = None

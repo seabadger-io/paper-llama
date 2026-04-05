@@ -80,8 +80,22 @@ export default {
                                             </div>
                                         </div>
 
+                                        <!-- AI Recommendations -->
+                                        <div v-if="!log.new_state?.error && log.new_state?.ai_recommended && (log.new_state.ai_recommended.title || log.new_state.ai_recommended.correspondent || log.new_state.ai_recommended.document_type || (log.new_state.ai_recommended.tags && log.new_state.ai_recommended.tags.length > 0))" class="bg-purple-50 p-3 rounded mt-2 text-xs sm:text-sm border-l-4 border-purple-400">
+                                            <div class="font-semibold text-[10px] uppercase text-purple-600 mb-1 flex items-center">
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                                AI Recommendations
+                                            </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                                                <div v-if="log.new_state.ai_recommended.title" class="truncate" :title="log.new_state.ai_recommended.title"><strong>Title:</strong> {{ log.new_state.ai_recommended.title }}</div>
+                                                <div v-if="log.new_state.ai_recommended.correspondent" class="truncate" :title="log.new_state.ai_recommended.correspondent"><strong>Corr:</strong> {{ log.new_state.ai_recommended.correspondent }}</div>
+                                                <div v-if="log.new_state.ai_recommended.document_type" class="truncate" :title="log.new_state.ai_recommended.document_type"><strong>Type:</strong> {{ log.new_state.ai_recommended.document_type }}</div>
+                                                <div v-if="log.new_state.ai_recommended.tags && log.new_state.ai_recommended.tags.length > 0" class="col-span-full mt-1"><strong>Tags:</strong> {{ log.new_state.ai_recommended.tags.join(', ') }}</div>
+                                            </div>
+                                        </div>
+
                                         <!-- Error State: Specialized Error Card -->
-                                        <div v-else class="bg-red-50 p-3 rounded mt-2 text-xs sm:text-sm border-l-4 border-red-500">
+                                        <div v-if="log.new_state?.error" class="bg-red-50 p-3 rounded mt-2 text-xs sm:text-sm border-l-4 border-red-500">
                                             <div class="font-semibold text-[10px] uppercase text-red-600 mb-2 flex items-center">
                                                 <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                                 Processing Failed
@@ -211,6 +225,11 @@ export default {
                                 <input id="set_update_created" type="checkbox" v-model="settings.update_creation_date" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                                 <label for="set_update_created" class="ml-2 block text-sm text-gray-900">Update Creation Date</label>
                             </div>
+                            <div class="flex items-center mt-4 border-t pt-2 border-gray-100">
+                                <input id="set_enable_generation" type="checkbox" v-model="settings.enable_ai_metadata_creation" class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                                <label for="set_enable_generation" class="ml-2 block text-sm font-medium text-purple-800">Enable AI Metadata Generation</label>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1 mb-2 ml-6">When enabled, AI will suggest new tags, correspondents, and document types if existing ones aren't a good match.</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Custom Instructions</label>

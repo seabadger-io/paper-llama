@@ -146,6 +146,11 @@ export default {
                                 <input id="wiz_update_created" type="checkbox" v-model="form.update_creation_date" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                                 <label for="wiz_update_created" class="ml-2 block text-sm text-gray-900">Update Creation Date</label>
                             </div>
+                            <div class="flex items-center mt-2 border-t pt-2 border-gray-100">
+                                <input id="wiz_enable_generation" type="checkbox" v-model="form.enable_ai_metadata_creation" class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                                <label for="wiz_enable_generation" class="ml-2 block text-sm text-gray-900 font-medium text-purple-800">Enable AI Metadata Generation</label>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1 mb-2 ml-6">When enabled, AI can suggest new tags, correspondents, and document types if existing ones don't match well.</p>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Custom Instructions</label>
@@ -214,6 +219,7 @@ export default {
                 update_document_type: true,
                 update_tags: true,
                 max_tags: 5,
+                enable_ai_metadata_creation: false,
                 update_creation_date: false,
                 custom_prompt: '',
                 document_word_limit: 1500,
