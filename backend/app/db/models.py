@@ -46,7 +46,9 @@ class AppSettings(Base):
     update_document_type = Column(Boolean, default=True)
     update_tags = Column(Boolean, default=True)
     max_tags = Column(Integer, default=5)
-    enable_ai_metadata_creation = Column(Boolean, default=False)
+    generate_correspondent = Column(Boolean, default=False)
+    generate_document_type = Column(Boolean, default=False)
+    generate_tags = Column(Boolean, default=False)
     update_creation_date = Column(Boolean, default=False)
     document_word_limit = Column(Integer, default=1500)
     schedule_interval_minutes = Column(Integer, default=0)  # 0 means manual/webhook only
@@ -56,6 +58,14 @@ class AppSettings(Base):
     query_tag_id = Column(Integer, nullable=True)  # Tag ID used to poll documents
     force_process_tag_id = Column(Integer, nullable=True)  # Tag ID that forces reprocessing
     custom_prompt = Column(Text, nullable=True)  # Custom instructions for the AI
+
+    # Metadata Permissions
+    metadata_use_system_defaults = Column(Boolean, default=True)
+    metadata_owner_id = Column(Integer, nullable=True)
+    metadata_view_users = Column(JSON, default=[])
+    metadata_view_groups = Column(JSON, default=[])
+    metadata_edit_users = Column(JSON, default=[])
+    metadata_edit_groups = Column(JSON, default=[])
 
 
 class ProcessedDocument(Base):

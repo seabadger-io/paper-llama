@@ -47,7 +47,9 @@ def mock_settings():
     settings.update_correspondent = True
     settings.update_creation_date = True
     settings.max_tags = 5
-    settings.enable_ai_metadata_creation = False
+    settings.generate_correspondent = False
+    settings.generate_document_type = False
+    settings.generate_tags = False
     settings.remove_query_tag = True
     settings.query_tag_id = 1
     settings.force_process_tag_id = None
@@ -63,6 +65,11 @@ def processor(mock_db_session, mock_settings):
 
     proc = DocumentProcessor(mock_db_session, mock_settings)
     proc.paperless = AsyncMock()
+    # Default to empty lists for metadata to avoid AsyncMock objects causing unawaited warnings
+    proc.paperless.get_tags.return_value = []
+    proc.paperless.get_correspondents.return_value = []
+    proc.paperless.get_document_types.return_value = []
+
     proc.ollama = AsyncMock()
     return proc
 
@@ -197,3 +204,70 @@ async def test_process_document_retry_error(processor, mock_settings, mocker):
         processor.db.add_called_count == 3
     )  # 1 processing log, 1 error lock log, 1 changelog max_retries
     assert processor.db.rollback_called_count == 1
+
+
+@pytest.mark.asyncio
+async def test_process_document_metadata_generation_with_permissions(processor, mock_settings):
+    mock_settings.generate_tags = True
+    mock_settings.metadata_owner_id = 42
+    mock_settings.metadata_view_users = [1, 2]
+    mock_settings.metadata_view_groups = [10]
+    mock_settings.metadata_edit_users = [3]
+    mock_settings.metadata_edit_groups = [20]
+
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = []
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+
+    processor.paperless.get_document.return_value = {
+        "id": 100,
+        "content": "New content",
+        "title": "Scan 123",
+        "tags": [],
+    }
+
+    processor.ollama.generate_completion.return_value = '{"ai_recommended": {"tags": ["NewTag"]}}'
+    processor.paperless.create_tag.return_value = 500
+
+    await processor.process_document(100)
+
+    # Check if create_tag was called with correct owner and permissions
+    expected_perms = {
+        "view": {"users": [1, 2], "groups": [10]},
+        "change": {"users": [3], "groups": [20]},
+    }
+    processor.paperless.create_tag.assert_called_once_with(
+        "NewTag", owner=42, set_permissions=expected_perms
+    )
+
+
+@pytest.mark.asyncio
+async def test_process_document_metadata_generation_document_owner(processor, mock_settings):
+    mock_settings.generate_correspondent = True
+    mock_settings.metadata_owner_id = -1  # Sentinel for document owner
+
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = []
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+
+    processor.paperless.get_document.return_value = {
+        "id": 100,
+        "content": "Content",
+        "title": "Scan 123",
+        "tags": [],
+        "owner": 5,  # Document owner is 5
+    }
+
+    processor.ollama.generate_completion.return_value = (
+        '{"ai_recommended": {"correspondent": "NewCorp"}}'
+    )
+    processor.paperless.create_correspondent.return_value = 600
+
+    await processor.process_document(100)
+
+    # Check if owner 5 was picked up from the document
+    processor.paperless.create_correspondent.assert_called_once()
+    args, kwargs = processor.paperless.create_correspondent.call_args
+    assert kwargs["owner"] == 5

@@ -31,7 +31,9 @@ class SettingsUpdate(BaseModel):
     update_document_type: bool = True
     update_tags: bool = True
     max_tags: int = 5
-    enable_ai_metadata_creation: bool = False
+    generate_correspondent: bool = False
+    generate_document_type: bool = False
+    generate_tags: bool = False
     update_creation_date: bool = False
     document_word_limit: int = 1500
     schedule_interval_minutes: int = 0
@@ -40,6 +42,12 @@ class SettingsUpdate(BaseModel):
     force_process_tag_id: int | None = None
     custom_prompt: str | None = None
     server_timezone: str = "UTC"
+    metadata_use_system_defaults: bool = False
+    metadata_owner_id: int | None = None
+    metadata_view_users: list[int] = []
+    metadata_view_groups: list[int] = []
+    metadata_edit_users: list[int] = []
+    metadata_edit_groups: list[int] = []
 
 
 class SetupStatus(BaseModel):
@@ -91,9 +99,13 @@ async def get_current_settings(
         update_document_type=settings.update_document_type,
         update_tags=settings.update_tags,
         max_tags=settings.max_tags if settings.max_tags is not None else 5,
-        enable_ai_metadata_creation=settings.enable_ai_metadata_creation
-        if settings.enable_ai_metadata_creation is not None
+        generate_correspondent=settings.generate_correspondent
+        if settings.generate_correspondent is not None
         else False,
+        generate_document_type=settings.generate_document_type
+        if settings.generate_document_type is not None
+        else False,
+        generate_tags=settings.generate_tags if settings.generate_tags is not None else False,
         update_creation_date=settings.update_creation_date
         if settings.update_creation_date is not None
         else False,
@@ -104,6 +116,14 @@ async def get_current_settings(
         force_process_tag_id=settings.force_process_tag_id,
         custom_prompt=settings.custom_prompt,
         server_timezone=core_settings.TZ,
+        metadata_use_system_defaults=settings.metadata_use_system_defaults
+        if settings.metadata_use_system_defaults is not None
+        else False,
+        metadata_owner_id=settings.metadata_owner_id,
+        metadata_view_users=settings.metadata_view_users or [],
+        metadata_view_groups=settings.metadata_view_groups or [],
+        metadata_edit_users=settings.metadata_edit_users or [],
+        metadata_edit_groups=settings.metadata_edit_groups or [],
     )
 
 
@@ -135,7 +155,9 @@ async def update_settings(
     app_settings.update_document_type = settings_data.update_document_type
     app_settings.update_tags = settings_data.update_tags
     app_settings.max_tags = settings_data.max_tags
-    app_settings.enable_ai_metadata_creation = settings_data.enable_ai_metadata_creation
+    app_settings.generate_correspondent = settings_data.generate_correspondent
+    app_settings.generate_document_type = settings_data.generate_document_type
+    app_settings.generate_tags = settings_data.generate_tags
     app_settings.update_creation_date = settings_data.update_creation_date
     app_settings.document_word_limit = settings_data.document_word_limit
     app_settings.schedule_interval_minutes = settings_data.schedule_interval_minutes
@@ -143,6 +165,12 @@ async def update_settings(
     app_settings.query_tag_id = settings_data.query_tag_id
     app_settings.force_process_tag_id = settings_data.force_process_tag_id
     app_settings.custom_prompt = settings_data.custom_prompt
+    app_settings.metadata_use_system_defaults = settings_data.metadata_use_system_defaults
+    app_settings.metadata_owner_id = settings_data.metadata_owner_id
+    app_settings.metadata_view_users = settings_data.metadata_view_users
+    app_settings.metadata_view_groups = settings_data.metadata_view_groups
+    app_settings.metadata_edit_users = settings_data.metadata_edit_users
+    app_settings.metadata_edit_groups = settings_data.metadata_edit_groups
 
     await db.commit()
 
@@ -199,3 +227,45 @@ async def get_change_logs(
         }
         for log in logs
     ]
+
+
+@router.get("/paperless/users")
+async def get_paperless_users(
+    db: AsyncSession = Depends(get_db), current_user: AdminUser = Depends(get_current_user)
+):
+    """Fetch users from Paperless."""
+    query = select(AppSettings).limit(1)
+    result = await db.execute(query)
+    settings = result.scalar_one_or_none()
+    if not settings or not settings.paperless_url or not settings.paperless_token:
+        return []
+
+    from ...services.paperless import PaperlessClient
+
+    try:
+        client = PaperlessClient(settings.paperless_url, settings.paperless_token)
+        return await client.get_users()
+    except Exception as e:
+        logger.error(f"Error fetching Paperless users: {e}")
+        return []
+
+
+@router.get("/paperless/groups")
+async def get_paperless_groups(
+    db: AsyncSession = Depends(get_db), current_user: AdminUser = Depends(get_current_user)
+):
+    """Fetch groups from Paperless."""
+    query = select(AppSettings).limit(1)
+    result = await db.execute(query)
+    settings = result.scalar_one_or_none()
+    if not settings or not settings.paperless_url or not settings.paperless_token:
+        return []
+
+    from ...services.paperless import PaperlessClient
+
+    try:
+        client = PaperlessClient(settings.paperless_url, settings.paperless_token)
+        return await client.get_groups()
+    except Exception as e:
+        logger.error(f"Error fetching Paperless groups: {e}")
+        return []

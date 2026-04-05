@@ -59,6 +59,12 @@ export const api = {
     getProcessing() {
         return this.request('/admin/processing', 'GET', null, true);
     },
+    getPaperlessUsers() {
+        return this.request('/admin/paperless/users', 'GET', null, true);
+    },
+    getPaperlessGroups() {
+        return this.request('/admin/paperless/groups', 'GET', null, true);
+    },
     triggerProcessing() {
         return this.request('/admin/trigger', 'POST', null, true);
     }

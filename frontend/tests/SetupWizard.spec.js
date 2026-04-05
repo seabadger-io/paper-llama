@@ -8,6 +8,8 @@ vi.mock('../assets/api.js', () => ({
     api: {
         testOllama: vi.fn(),
         testPaperless: vi.fn(),
+        getPaperlessUsers: vi.fn(),
+        getPaperlessGroups: vi.fn(),
         runSetup: vi.fn()
     }
 }))
@@ -88,15 +90,22 @@ describe('SetupWizard Component', () => {
 
     it('tests Paperless connection and shows success message', async () => {
         const wrapper = createWrapper()
-        api.testPaperless.mockResolvedValueOnce({ tags_count: 5 })
-        
+        api.testPaperless.mockResolvedValueOnce({
+            tags_count: 5,
+            tags: [],
+            users: [{ id: 1, username: 'admin' }],
+            groups: [{ id: 1, name: 'users' }]
+        })
+
         await wrapper.vm.testPaperless()
-        
+
         expect(api.testPaperless).toHaveBeenCalledWith({
             paperless_url: wrapper.vm.form.paperless_url,
             paperless_token: wrapper.vm.form.paperless_token
         })
-        expect(wrapper.vm.paperlessStatus).toBe('Connection successful! Found 5 tags.')
+        expect(wrapper.vm.paperlessStatus).toBe('Connection successful! Found 5 tags, 1 users, 1 groups.')
+        expect(wrapper.vm.availableUsers).toHaveLength(1)
+        expect(wrapper.vm.availableGroups).toHaveLength(1)
     })
 
     it('submits the setup form and redirects to login on success', async () => {
@@ -104,14 +113,16 @@ describe('SetupWizard Component', () => {
         api.runSetup.mockResolvedValueOnce({})
         
         // Change one of the new fields to non-default
-        wrapper.vm.form.enable_ai_metadata_creation = true
+        wrapper.vm.form.generate_correspondent = true
         wrapper.vm.form.max_tags = 10
         
         await wrapper.vm.submitSetup()
         
         expect(wrapper.vm.loading).toBe(false)
         expect(api.runSetup).toHaveBeenCalledWith(expect.objectContaining({
-            enable_ai_metadata_creation: true,
+            generate_correspondent: true,
+            generate_document_type: false,
+            generate_tags: false,
             max_tags: 10
         }))
         expect(mockRouter.push).toHaveBeenCalledWith('/login')

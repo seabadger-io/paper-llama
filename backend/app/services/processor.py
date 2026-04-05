@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import UTC, datetime
 
@@ -14,6 +15,22 @@ from .paperless import PaperlessClient
 from .prompt_builder import build_prompt
 
 logger = logging.getLogger(__name__)
+
+
+def fuzzy_match(name: str, available_items: list[dict]) -> dict | None:
+    def normalize(text: str) -> str:
+        if not text:
+            return ""
+        return re.sub(r"[^a-z0-9]", "", str(text).lower())
+
+    normalized_name = normalize(name)
+    if not normalized_name:
+        return None
+
+    for item in available_items:
+        if normalize(item.get("name")) == normalized_name:
+            return item
+    return None
 
 
 class DocumentProcessor:
@@ -33,7 +50,6 @@ class DocumentProcessor:
             base_url=settings.llamacpp_url or "http://localhost:8080",
             timeout=float(settings.llamacpp_timeout) if settings.llamacpp_timeout else 300.0,
         )
-
 
     async def get_cached_metadata(self):
         """Fetches metadata from Paperless or returns cached version if less than 10 minutes old."""
@@ -139,7 +155,86 @@ class DocumentProcessor:
                         if self.settings.update_document_type and "document_type_id" in ai_data
                         else original_state["document_type"]
                     )
+                    ai_recommended = ai_data.get("ai_recommended", {})
                     new_tag_ids = ai_data.get("tag_ids", []) if self.settings.update_tags else []
+                    ai_generated_log = {}
+
+                    # Resolve metadata owner and permissions
+                    metadata_owner = None
+                    metadata_perms = None
+
+                    if not getattr(self.settings, "metadata_use_system_defaults", False):
+                        if self.settings.metadata_owner_id == -1:
+                            metadata_owner = doc.get("owner")
+                        else:
+                            metadata_owner = self.settings.metadata_owner_id
+
+                        metadata_perms = {
+                            "view": {
+                                "users": self.settings.metadata_view_users or [],
+                                "groups": self.settings.metadata_view_groups or [],
+                            },
+                            "change": {
+                                "users": self.settings.metadata_edit_users or [],
+                                "groups": self.settings.metadata_edit_groups or [],
+                            },
+                        }
+
+                    # Fuzzy match or create new metadata
+                    if ai_recommended.get("correspondent") and getattr(
+                        self.settings, "generate_correspondent", False
+                    ):
+                        corr_name = ai_recommended["correspondent"]
+                        match = fuzzy_match(corr_name, correspondents)
+                        if match:
+                            new_corr_id = match["id"]
+                        else:
+                            new_corr_id = await self.paperless.create_correspondent(
+                                corr_name, owner=metadata_owner, set_permissions=metadata_perms
+                            )
+                            item = {"id": new_corr_id, "name": corr_name}
+                            correspondents.append(item)
+                            DocumentProcessor._metadata_cache["correspondents"].append(item)
+
+                        ai_generated_log["correspondent"] = new_corr_id
+
+                    if ai_recommended.get("document_type") and getattr(
+                        self.settings, "generate_document_type", False
+                    ):
+                        dtype_name = ai_recommended["document_type"]
+                        match = fuzzy_match(dtype_name, document_types)
+                        if match:
+                            new_dtype_id = match["id"]
+                        else:
+                            new_dtype_id = await self.paperless.create_document_type(
+                                dtype_name, owner=metadata_owner, set_permissions=metadata_perms
+                            )
+                            item = {"id": new_dtype_id, "name": dtype_name}
+                            document_types.append(item)
+                            DocumentProcessor._metadata_cache["document_types"].append(item)
+
+                        ai_generated_log["document_type"] = new_dtype_id
+
+                    if ai_recommended.get("tags") and getattr(
+                        self.settings, "generate_tags", False
+                    ):
+                        ai_generated_log["tags"] = []
+                        for tag_name in ai_recommended["tags"]:
+                            match = fuzzy_match(tag_name, tags)
+                            if match:
+                                new_tag_ids.append(match["id"])
+                            else:
+                                new_tag_id = await self.paperless.create_tag(
+                                    tag_name, owner=metadata_owner, set_permissions=metadata_perms
+                                )
+                                item = {"id": new_tag_id, "name": tag_name}
+                                tags.append(item)
+                                DocumentProcessor._metadata_cache["tags"].append(item)
+                                new_tag_ids.append(new_tag_id)
+
+                            ai_generated_log["tags"].append(new_tag_id)
+                        if not ai_generated_log["tags"]:
+                            del ai_generated_log["tags"]
 
                     # Remove trigger tags if configured
                     remove_tag_ids = []
@@ -162,6 +257,8 @@ class DocumentProcessor:
                         "correspondent": new_corr_id,
                         "document_type": new_dtype_id,
                     }
+                    if ai_generated_log:
+                        new_state["ai_generated"] = ai_generated_log
 
                     update_kwargs = {
                         "correspondent_id": new_corr_id,
@@ -180,9 +277,6 @@ class DocumentProcessor:
                         new_state["created"] = ai_data.get("created")
                     else:
                         new_state["created"] = original_state.get("created")
-
-                    if getattr(self.settings, 'enable_ai_metadata_creation', False) and ai_data.get("ai_recommended"):
-                        new_state["ai_recommended"] = ai_data.get("ai_recommended")
 
                 # 4. Update Paperless
                 await self.paperless.update_document(document_id, **update_kwargs)
@@ -221,8 +315,8 @@ class DocumentProcessor:
                     "ai_processing_time_ms": ai_processing_time_ms,
                 }
 
-                if new_state.get("ai_recommended"):
-                    log_new["ai_recommended"] = new_state.get("ai_recommended")
+                if new_state.get("ai_generated"):
+                    log_new["ai_generated"] = new_state.get("ai_generated")
 
                 # Log changes
                 log_entry = DocumentChangeLog(

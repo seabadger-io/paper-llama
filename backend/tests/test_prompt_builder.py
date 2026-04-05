@@ -14,8 +14,11 @@ def base_settings():
         update_creation_date=False,
         max_tags=5,
         document_word_limit=10,
-        enable_ai_metadata_creation=False
+        generate_correspondent=False,
+        generate_document_type=False,
+        generate_tags=False,
     )
+
 
 def test_prompt_builder_basic(base_settings):
     document_content = "This is a simple test document content."
@@ -32,8 +35,11 @@ def test_prompt_builder_basic(base_settings):
     assert "EXPECTED JSON FORMAT" in prompt
     assert "ai_recommended" not in prompt
 
+
 def test_prompt_builder_ai_metadata_creation(base_settings):
-    base_settings.enable_ai_metadata_creation = True
+    base_settings.generate_correspondent = True
+    base_settings.generate_document_type = True
+    base_settings.generate_tags = True
     document_content = "This is a simple test document content."
     tags = []
     correspondents = []
@@ -45,6 +51,7 @@ def test_prompt_builder_ai_metadata_creation(base_settings):
     assert "AI GENERATION RULES:" in prompt
     assert "ai_recommended" in prompt
     assert "New Correspondent Name" in prompt
+
 
 def test_prompt_builder_document_limit(base_settings):
     base_settings.document_word_limit = 2

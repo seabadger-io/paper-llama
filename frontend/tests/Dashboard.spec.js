@@ -12,6 +12,8 @@ vi.mock('../assets/api.js', () => ({
         testOllama: vi.fn(),
         testLlamacpp: vi.fn(),
         testPaperless: vi.fn(),
+        getPaperlessUsers: vi.fn(),
+        getPaperlessGroups: vi.fn(),
         triggerProcessing: vi.fn()
     }
 }))
@@ -37,9 +39,12 @@ describe('Dashboard Component', () => {
         api.getProcessing.mockResolvedValue([])
         api.getSettings.mockResolvedValue({
             paperless_url: 'http://paperless',
+            paperless_token: 'token',
             update_title: true
         })
         api.testOllama.mockResolvedValue({ models: ['model-a'] })
+        api.getPaperlessUsers.mockResolvedValue([])
+        api.getPaperlessGroups.mockResolvedValue([])
     })
     
     afterEach(() => {
@@ -79,7 +84,12 @@ describe('Dashboard Component', () => {
             document_id: 100,
             changed_at: '2023-01-01T12:00:00Z',
             original_state: { title: 'Invoice' },
-            new_state: { title: 'Processed Invoice', ai_processing_time_ms: 1500 }
+            new_state: { 
+                title: 'Processed Invoice', 
+                ai_processing_time_ms: 1500,
+                tags: ['200 (AI Tag)', '300 (Manual Tag)'],
+                ai_generated: { tags: [200] }
+            }
         }])
         
         const wrapper = await createWrapper()
@@ -87,7 +97,15 @@ describe('Dashboard Component', () => {
         expect(wrapper.text()).toContain('Invoice')
         expect(wrapper.text()).toContain('#100')
         expect(wrapper.text()).toContain('Processed Invoice')
-        expect(wrapper.text()).toContain('1.5s') // ai_processing_time_ms properly formatted
+        expect(wrapper.text()).toContain('1.5s')
+        
+        // Check for AI Tag highlight (the sparkle icon)
+        expect(wrapper.html()).toContain('✨')
+        
+        // Find the specific tag element for '200 (AI Tag)' and check its class
+        const aiTag = wrapper.findAll('.text-green-600')
+        expect(aiTag.length).toBe(1)
+        expect(aiTag[0].text()).toContain('200 (AI Tag)')
     })
 
     it('navigates to settings tab and saves settings', async () => {

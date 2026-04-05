@@ -72,25 +72,35 @@ export default {
                                             <div class="min-w-0">
                                                 <div class="font-semibold text-[10px] uppercase text-blue-400 mb-1">After</div>
                                                 <div class="truncate" :title="log.new_state?.title"><strong>Title:</strong> {{ log.new_state?.title || 'None' }}</div>
-                                                <div class="truncate" :title="log.new_state?.correspondent"><strong>Corr:</strong> {{ log.new_state?.correspondent || 'None' }}</div>
-                                                <div class="truncate" :title="log.new_state?.document_type"><strong>Type:</strong> {{ log.new_state?.document_type || 'None' }}</div>
-                                                <div class="truncate" :title="log.new_state?.created"><strong>Date:</strong> {{ log.new_state?.created || 'None' }}</div>
-                                                <div class="mt-1 line-clamp-2" :title="(log.new_state?.tags || []).join(', ')"><strong>Tags:</strong> {{ (log.new_state?.tags || []).join(', ') || 'None' }}</div>
+                                                <div class="truncate" :title="log.new_state?.correspondent">
+                                                    <strong>Corr: </strong>
+                                                    <span :class="{ 'text-green-600 bg-green-50 px-1 rounded': log.new_state?.ai_generated?.correspondent }">
+                                                        {{ log.new_state?.correspondent || 'None' }}
+                                                    </span>
+                                                    <span v-if="log.new_state?.ai_generated?.correspondent" title="AI Generated" class="ml-1 text-xs">✨</span>
+                                                </div>
+                                                <div class="truncate mt-1" :title="log.new_state?.document_type">
+                                                    <strong>Type: </strong>
+                                                    <span :class="{ 'text-green-600 bg-green-50 px-1 rounded': log.new_state?.ai_generated?.document_type }">
+                                                        {{ log.new_state?.document_type || 'None' }}
+                                                    </span>
+                                                    <span v-if="log.new_state?.ai_generated?.document_type" title="AI Generated" class="ml-1 text-xs">✨</span>
+                                                </div>
+                                                <div class="truncate mt-1" :title="log.new_state?.created"><strong>Date:</strong> {{ log.new_state?.created || 'None' }}</div>
+                                                <div class="mt-1 line-clamp-2" :title="(log.new_state?.tags || []).join(', ')">
+                                                    <strong>Tags: </strong>
+                                                    <span v-if="log.new_state?.tags?.length">
+                                                        <span v-for="(tag, index) in log.new_state.tags" :key="index">
+                                                            <span :class="{ 'text-green-600 bg-green-50 px-1 rounded': log.new_state.ai_generated?.tags?.some(g => String(g) === tag.split(' (')[0]) }">
+                                                                {{ tag }}
+                                                            </span>
+                                                            <span v-if="log.new_state.ai_generated?.tags?.some(g => String(g) === tag.split(' (')[0])" title="AI Generated" class="text-[10px] ml-0.5">✨</span>
+                                                            {{ index < log.new_state.tags.length - 1 ? ', ' : '' }}
+                                                        </span>
+                                                    </span>
+                                                    <span v-else>None</span>
+                                                </div>
                                                 <div v-if="log.new_state?.ai_processing_time_ms != null" class="mt-1 text-xs text-indigo-500 font-medium whitespace-nowrap"><strong>AI Time:</strong> {{ (log.new_state.ai_processing_time_ms / 1000).toFixed(1) }}s</div>
-                                            </div>
-                                        </div>
-
-                                        <!-- AI Recommendations -->
-                                        <div v-if="!log.new_state?.error && log.new_state?.ai_recommended && (log.new_state.ai_recommended.title || log.new_state.ai_recommended.correspondent || log.new_state.ai_recommended.document_type || (log.new_state.ai_recommended.tags && log.new_state.ai_recommended.tags.length > 0))" class="bg-purple-50 p-3 rounded mt-2 text-xs sm:text-sm border-l-4 border-purple-400">
-                                            <div class="font-semibold text-[10px] uppercase text-purple-600 mb-1 flex items-center">
-                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                                                AI Recommendations
-                                            </div>
-                                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
-                                                <div v-if="log.new_state.ai_recommended.title" class="truncate" :title="log.new_state.ai_recommended.title"><strong>Title:</strong> {{ log.new_state.ai_recommended.title }}</div>
-                                                <div v-if="log.new_state.ai_recommended.correspondent" class="truncate" :title="log.new_state.ai_recommended.correspondent"><strong>Corr:</strong> {{ log.new_state.ai_recommended.correspondent }}</div>
-                                                <div v-if="log.new_state.ai_recommended.document_type" class="truncate" :title="log.new_state.ai_recommended.document_type"><strong>Type:</strong> {{ log.new_state.ai_recommended.document_type }}</div>
-                                                <div v-if="log.new_state.ai_recommended.tags && log.new_state.ai_recommended.tags.length > 0" class="col-span-full mt-1"><strong>Tags:</strong> {{ log.new_state.ai_recommended.tags.join(', ') }}</div>
                                             </div>
                                         </div>
 
@@ -206,36 +216,152 @@ export default {
                                 <label for="set_update_title" class="ml-2 block text-sm text-gray-900">Update Title</label>
                             </div>
                             <div class="flex items-center mt-2">
-                                <input id="set_update_corr" type="checkbox" v-model="settings.update_correspondent" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <input id="set_update_corr" type="checkbox" v-model="settings.update_correspondent" @change="settings.generate_correspondent = settings.update_correspondent && settings.generate_correspondent" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                                 <label for="set_update_corr" class="ml-2 block text-sm text-gray-900">Update Correspondent</label>
                             </div>
+                            <div class="flex items-center mt-1 ml-6" :class="{ 'opacity-50': !settings.update_correspondent }">
+                                <input id="set_gen_corr" type="checkbox" v-model="settings.generate_correspondent" :disabled="!settings.update_correspondent" class="h-3 w-3 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                                <label for="set_gen_corr" class="ml-2 block text-xs text-gray-700">Allow AI generation</label>
+                            </div>
+
                             <div class="flex items-center mt-2">
-                                <input id="set_update_type" type="checkbox" v-model="settings.update_document_type" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <input id="set_update_type" type="checkbox" v-model="settings.update_document_type" @change="settings.generate_document_type = settings.update_document_type && settings.generate_document_type" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                                 <label for="set_update_type" class="ml-2 block text-sm text-gray-900">Update Document Type</label>
                             </div>
-                            <div class="flex items-center mt-2">
-                                <input id="set_update_tags" type="checkbox" v-model="settings.update_tags" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                <label for="set_update_tags" class="ml-2 block text-sm text-gray-900">Update Tags</label>
-                                <div v-if="settings.update_tags" class="ml-4 flex items-center">
-                                    <label for="set_max_tags" class="mr-2 text-xs text-gray-600">Maximum number of tags to assign:</label>
-                                    <input id="set_max_tags" type="number" v-model="settings.max_tags" min="1" max="50" class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <div class="flex items-center mt-1 ml-6" :class="{ 'opacity-50': !settings.update_document_type }">
+                                <input id="set_gen_type" type="checkbox" v-model="settings.generate_document_type" :disabled="!settings.update_document_type" class="h-3 w-3 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                                <label for="set_gen_type" class="ml-2 block text-xs text-gray-700">Allow AI generation</label>
+                            </div>
+
+                            <div class="flex flex-col mt-2">
+                                <div class="flex items-center">
+                                    <input id="set_update_tags" type="checkbox" v-model="settings.update_tags" @change="settings.generate_tags = settings.update_tags && settings.generate_tags" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                    <label for="set_update_tags" class="ml-2 block text-sm text-gray-900">Update Tags</label>
+                                    <div v-if="settings.update_tags" class="ml-4 flex items-center">
+                                        <label for="set_max_tags" class="mr-2 text-xs text-gray-600">Maximum tags:</label>
+                                        <input id="set_max_tags" type="number" v-model="settings.max_tags" min="1" max="50" class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                </div>
+                                <div class="flex items-center mt-1 ml-6" :class="{ 'opacity-50': !settings.update_tags }">
+                                    <input id="set_gen_tags" type="checkbox" v-model="settings.generate_tags" :disabled="!settings.update_tags" class="h-3 w-3 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                                    <label for="set_gen_tags" class="ml-2 block text-xs text-gray-700">Allow AI generation</label>
                                 </div>
                             </div>
                             <div class="flex items-center mt-2">
                                 <input id="set_update_created" type="checkbox" v-model="settings.update_creation_date" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                                 <label for="set_update_created" class="ml-2 block text-sm text-gray-900">Update Creation Date</label>
                             </div>
-                            <div class="flex items-center mt-4 border-t pt-2 border-gray-100">
-                                <input id="set_enable_generation" type="checkbox" v-model="settings.enable_ai_metadata_creation" class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
-                                <label for="set_enable_generation" class="ml-2 block text-sm font-medium text-purple-800">Enable AI Metadata Generation</label>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1 mb-2 ml-6">When enabled, AI will suggest new tags, correspondents, and document types if existing ones aren't a good match.</p>
                         </div>
+
+                        <!-- Metadata Permissions -->
+                        <div class="border-t pt-4 mt-4">
+                            <h4 class="text-sm font-semibold text-gray-900 mb-4">Metadata Permissions</h4>
+                            <p class="text-xs text-gray-500 mb-4 italic">Applied ONLY when Paperless Llama creates new Tags, Correspondents, or Document Types.</p>
+                            
+                            <div class="flex items-center mb-4">
+                                <input id="set_use_defaults" type="checkbox" v-model="settings.metadata_use_system_defaults" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                <label for="set_use_defaults" class="ml-2 block text-sm text-gray-900">Use System Defaults</label>
+                            </div>
+                            <div v-if="!settings.metadata_use_system_defaults">
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">New Metadata Owner</label>
+                                    <select v-model="settings.metadata_owner_id" class="block w-full pl-3 pr-10 py-2 text-sm border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md">
+                                        <option :value="null">None (Public)</option>
+                                        <option :value="-1">Document Owner</option>
+                                        <optgroup label="Specific User">
+                                            <option v-for="user in availableUsers" :key="user.id" :value="user.id">{{ user.username }} ({{ user.full_name || 'No name' }})</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <!-- View Permissions -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">View Permissions</label>
+                                    
+                                    <!-- View Users -->
+                                    <div class="mb-4">
+                                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">View Users</label>
+                                        <select @change="addPermission('metadata_view_users', $event)" class="block w-full pl-3 pr-10 py-1.5 text-xs border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white shadow-sm">
+                                            <option value="">Add User...</option>
+                                            <option v-for="user in filteredOptions('user', settings.metadata_view_users)" :key="user.id" :value="user.id">{{ user.username }}</option>
+                                        </select>
+                                        <div class="flex flex-wrap gap-1.5 mt-2">
+                                            <span v-for="id in settings.metadata_view_users" :key="id" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                                                {{ resolveName('user', id) }}
+                                                <button type="button" @click="removePermission('metadata_view_users', id)" class="ml-1 inline-flex items-center p-0.5 hover:bg-blue-200 rounded-full text-blue-400 hover:text-blue-600 focus:outline-none">
+                                                    <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                                                </button>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- View Groups -->
+                                    <div>
+                                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">View Groups</label>
+                                        <select @change="addPermission('metadata_view_groups', $event)" class="block w-full pl-3 pr-10 py-1.5 text-xs border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white shadow-sm">
+                                            <option value="">Add Group...</option>
+                                            <option v-for="group in filteredOptions('group', settings.metadata_view_groups)" :key="group.id" :value="group.id">{{ group.name }}</option>
+                                        </select>
+                                        <div class="flex flex-wrap gap-1.5 mt-2">
+                                            <span v-for="id in settings.metadata_view_groups" :key="id" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                                                {{ resolveName('group', id) }}
+                                                <button type="button" @click="removePermission('metadata_view_groups', id)" class="ml-1 inline-flex items-center p-0.5 hover:bg-purple-200 rounded-full text-purple-400 hover:text-purple-600 focus:outline-none">
+                                                    <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                                                </button>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Edit Permissions -->
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-2">Edit Permissions</label>
+                                    
+                                    <!-- Edit Users -->
+                                    <div class="mb-4">
+                                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">Edit Users</label>
+                                        <select @change="addPermission('metadata_edit_users', $event)" class="block w-full pl-3 pr-10 py-1.5 text-xs border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white shadow-sm">
+                                            <option value="">Add User...</option>
+                                            <option v-for="user in filteredOptions('user', settings.metadata_edit_users)" :key="user.id" :value="user.id">{{ user.username }}</option>
+                                        </select>
+                                        <div class="flex flex-wrap gap-1.5 mt-2">
+                                            <span v-for="id in settings.metadata_edit_users" :key="id" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                                                {{ resolveName('user', id) }}
+                                                <button type="button" @click="removePermission('metadata_edit_users', id)" class="ml-1 inline-flex items-center p-0.5 hover:bg-blue-200 rounded-full text-blue-400 hover:text-blue-600 focus:outline-none">
+                                                    <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                                                </button>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Edit Groups -->
+                                    <div>
+                                        <label class="text-[10px] uppercase font-bold text-gray-500 block mb-1">Edit Groups</label>
+                                        <select @change="addPermission('metadata_edit_groups', $event)" class="block w-full pl-3 pr-10 py-1.5 text-xs border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md bg-white shadow-sm">
+                                            <option value="">Add Group...</option>
+                                            <option v-for="group in filteredOptions('group', settings.metadata_edit_groups)" :key="group.id" :value="group.id">{{ group.name }}</option>
+                                        </select>
+                                        <div class="flex flex-wrap gap-1.5 mt-2">
+                                            <span v-for="id in settings.metadata_edit_groups" :key="id" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                                                {{ resolveName('group', id) }}
+                                                <button type="button" @click="removePermission('metadata_edit_groups', id)" class="ml-1 inline-flex items-center p-0.5 hover:bg-purple-200 rounded-full text-purple-400 hover:text-purple-600 focus:outline-none">
+                                                    <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                                                </button>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Custom Instructions</label>
                             <p class="text-xs text-gray-500 mb-1">Optional. Add custom instructions for the AI prompt (e.g. "Be very concise").</p>
                             <textarea v-model="settings.custom_prompt" rows="3" class="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 sm:text-sm"></textarea>
                         </div>
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Document Word Limit</label>
                             <p class="text-xs text-gray-500 mb-1">Max words to send to AI (0 = unlimited).</p>
@@ -296,6 +422,8 @@ export default {
             error: '',
             message: '',
             paperlessStatus: '',
+            availableUsers: [],
+            availableGroups: [],
             logInterval: null
         };
     },
@@ -340,6 +468,16 @@ export default {
                 this.processingDocs = processingData;
                 this.settings = settingData;
                 this.serverTimezone = settingData.server_timezone || 'UTC';
+
+                if (this.settings.paperless_url && this.settings.paperless_token) {
+                    const [userData, groupData] = await Promise.all([
+                        api.getPaperlessUsers(),
+                        api.getPaperlessGroups()
+                    ]);
+                    this.availableUsers = userData;
+                    this.availableGroups = groupData;
+                }
+
                 await this.fetchModels(false);
                 if (this.settings.paperless_url && this.settings.paperless_token) {
                     await this.testPaperless(true);
@@ -431,6 +569,34 @@ export default {
         logout() {
             localStorage.removeItem('token');
             this.$router.push('/login');
+        },
+        resolveName(type, id) {
+            if (type === 'user') {
+                const user = this.availableUsers.find((u) => u.id === id);
+                return user ? user.username : id;
+            } else if (type === 'group') {
+                const group = this.availableGroups.find((g) => g.id === id);
+                return group ? group.name : id;
+            }
+            return id;
+        },
+        addPermission(collection, event) {
+            const id = parseInt(event.target.value);
+            if (id && !this.settings[collection].includes(id)) {
+                this.settings[collection].push(id);
+            }
+            event.target.value = ''; // Reset select
+        },
+        removePermission(collection, id) {
+            this.settings[collection] = this.settings[collection].filter((i) => i !== id);
+        },
+        filteredOptions(type, currentSelection) {
+            if (type === 'user') {
+                return this.availableUsers.filter((u) => !currentSelection.includes(u.id));
+            } else if (type === 'group') {
+                return this.availableGroups.filter((g) => !currentSelection.includes(g.id));
+            }
+            return [];
         },
         formatDate(dateStr) {
             if (!dateStr) return 'None';

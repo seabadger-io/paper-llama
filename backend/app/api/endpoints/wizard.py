@@ -47,7 +47,9 @@ class SetupWizardRequest(BaseModel):
     update_document_type: bool = True
     update_tags: bool = True
     max_tags: int = 5
-    enable_ai_metadata_creation: bool = False
+    generate_correspondent: bool = False
+    generate_document_type: bool = False
+    generate_tags: bool = False
     update_creation_date: bool = False
     document_word_limit: int = 1500
     schedule_interval_minutes: int
@@ -55,6 +57,12 @@ class SetupWizardRequest(BaseModel):
     query_tag_id: int | None = None
     force_process_tag_id: int | None = None
     custom_prompt: str | None = None
+    metadata_use_system_defaults: bool = False
+    metadata_owner_id: int | None = None
+    metadata_view_users: list[int] = []
+    metadata_view_groups: list[int] = []
+    metadata_edit_users: list[int] = []
+    metadata_edit_groups: list[int] = []
 
 
 @router.post("/wizard")
@@ -90,7 +98,9 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         update_document_type=request.update_document_type,
         update_tags=request.update_tags,
         max_tags=request.max_tags,
-        enable_ai_metadata_creation=request.enable_ai_metadata_creation,
+        generate_correspondent=request.generate_correspondent,
+        generate_document_type=request.generate_document_type,
+        generate_tags=request.generate_tags,
         update_creation_date=request.update_creation_date,
         document_word_limit=request.document_word_limit,
         schedule_interval_minutes=request.schedule_interval_minutes,
@@ -98,6 +108,12 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         query_tag_id=request.query_tag_id,
         force_process_tag_id=request.force_process_tag_id,
         custom_prompt=request.custom_prompt,
+        metadata_use_system_defaults=request.metadata_use_system_defaults,
+        metadata_owner_id=request.metadata_owner_id,
+        metadata_view_users=request.metadata_view_users,
+        metadata_view_groups=request.metadata_view_groups,
+        metadata_edit_users=request.metadata_edit_users,
+        metadata_edit_groups=request.metadata_edit_groups,
     )
     db.add(new_settings)
 
@@ -136,7 +152,15 @@ async def test_paperless(request: TestPaperlessRequest):
     client = PaperlessClient(base_url=request.paperless_url, token=request.paperless_token)
     try:
         tags = await client.get_tags()
-        return {"status": "ok", "tags_count": len(tags), "tags": tags}
+        users = await client.get_users()
+        groups = await client.get_groups()
+        return {
+            "status": "ok",
+            "tags_count": len(tags),
+            "tags": tags,
+            "users": users,
+            "groups": groups,
+        }
     except Exception as e:
         logger.error(f"Test Paperless failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))

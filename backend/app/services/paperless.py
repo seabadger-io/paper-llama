@@ -39,6 +39,13 @@ class PaperlessClient:
             response.raise_for_status()
             return response.json()
 
+    async def _post(self, endpoint: str, json_data: dict) -> Any:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            url = f"{self.base_url}/api/{endpoint}"
+            response = await client.post(url, headers=self.headers, json=json_data)
+            response.raise_for_status()
+            return response.json()
+
     # --- Fetch Metadata ---
 
     async def get_tags(self) -> list[dict]:
@@ -49,6 +56,50 @@ class PaperlessClient:
 
     async def get_document_types(self) -> list[dict]:
         return await self._get_all("document_types/")
+
+    async def get_users(self) -> list[dict]:
+        return await self._get_all("users/")
+
+    async def get_groups(self) -> list[dict]:
+        return await self._get_all("groups/")
+
+    # --- Create Metadata ---
+
+    async def _create_metadata(
+        self, endpoint: str, name: str, owner: int | None, set_permissions: dict | None
+    ) -> int:
+        payload = {
+            "name": name,
+            "match": "",
+            "matching_algorithm": 6,  # Automatic
+        }
+
+        # Tags support is_inbox_tag
+        if "tags/" in endpoint:
+            payload["is_inbox_tag"] = False
+
+        if owner is not None:
+            payload["owner"] = owner
+        if set_permissions:
+            payload["set_permissions"] = set_permissions
+
+        res = await self._post(endpoint, payload)
+        return res["id"]
+
+    async def create_tag(
+        self, name: str, owner: int | None = None, set_permissions: dict | None = None
+    ) -> int:
+        return await self._create_metadata("tags/", name, owner, set_permissions)
+
+    async def create_correspondent(
+        self, name: str, owner: int | None = None, set_permissions: dict | None = None
+    ) -> int:
+        return await self._create_metadata("correspondents/", name, owner, set_permissions)
+
+    async def create_document_type(
+        self, name: str, owner: int | None = None, set_permissions: dict | None = None
+    ) -> int:
+        return await self._create_metadata("document_types/", name, owner, set_permissions)
 
     # --- Fetch Documents ---
 
