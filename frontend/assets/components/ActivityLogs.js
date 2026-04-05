@@ -46,14 +46,15 @@ export default {
                                 <div class="min-w-0">
                                     <div class="font-semibold text-[10px] uppercase text-gray-400 mb-1">Before</div>
                                     <div class="truncate"><strong>Title:</strong> {{ log.original_state?.title || 'None' }}</div>
+                                    <div class="truncate"><strong>Date:</strong> {{ log.original_state?.created || 'None' }}</div>
                                     <div class="truncate"><strong>Corr:</strong> {{ log.original_state?.correspondent || 'None' }}</div>
                                     <div class="truncate"><strong>Type:</strong> {{ log.original_state?.document_type || 'None' }}</div>
-                                    <div class="truncate"><strong>Date:</strong> {{ log.original_state?.created || 'None' }}</div>
                                     <div class="mt-1 line-clamp-2"><strong>Tags:</strong> {{ (log.original_state?.tags || []).join(', ') || 'None' }}</div>
                                 </div>
                                 <div class="min-w-0">
                                     <div class="font-semibold text-[10px] uppercase text-blue-400 mb-1">After</div>
                                     <div class="truncate"><strong>Title:</strong> {{ log.new_state?.title || 'None' }}</div>
+                                    <div class="truncate"><strong>Date:</strong> {{ log.new_state?.created || 'None' }}</div>
                                     <div class="truncate">
                                         <strong>Corr: </strong>
                                         <span :class="{ 'text-green-600 bg-green-50 px-1 rounded': log.new_state?.ai_generated?.correspondent }">
@@ -68,7 +69,6 @@ export default {
                                         </span>
                                         <span v-if="log.new_state?.ai_generated?.document_type" title="AI Generated" class="ml-1 text-xs">✨</span>
                                     </div>
-                                    <div class="truncate"><strong>Date:</strong> {{ log.new_state?.created || 'None' }}</div>
                                     <div class="mt-1 line-clamp-2">
                                         <strong>Tags: </strong>
                                         <span v-if="log.new_state?.tags?.length">
