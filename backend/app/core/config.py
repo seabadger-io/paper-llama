@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # We use a default that we can detect and replace with a random key if not overridden
     SECRET_KEY: str = "GENERATE_ON_STARTUP"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour
 
     # Timezone for display
     TZ: str = "UTC"
