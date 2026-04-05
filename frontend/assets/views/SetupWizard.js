@@ -137,6 +137,10 @@ export default {
                             <div class="flex items-center mt-2">
                                 <input id="wiz_update_tags" type="checkbox" v-model="form.update_tags" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                                 <label for="wiz_update_tags" class="ml-2 block text-sm text-gray-900">Update Tags</label>
+                                <div v-if="form.update_tags" class="ml-4 flex items-center">
+                                    <label for="wiz_max_tags" class="mr-2 text-xs text-gray-600">Maximum number of tags to assign:</label>
+                                    <input id="wiz_max_tags" type="number" v-model="form.max_tags" min="1" max="50" class="w-16 px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                </div>
                             </div>
                             <div class="flex items-center mt-2">
                                 <input id="wiz_update_created" type="checkbox" v-model="form.update_creation_date" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
@@ -209,6 +213,7 @@ export default {
                 update_correspondent: true,
                 update_document_type: true,
                 update_tags: true,
+                max_tags: 5,
                 update_creation_date: false,
                 custom_prompt: '',
                 document_word_limit: 1500,

@@ -45,6 +45,7 @@ class AppSettings(Base):
     update_correspondent = Column(Boolean, default=True)
     update_document_type = Column(Boolean, default=True)
     update_tags = Column(Boolean, default=True)
+    max_tags = Column(Integer, default=5)
     update_creation_date = Column(Boolean, default=False)
     document_word_limit = Column(Integer, default=1500)
     schedule_interval_minutes = Column(Integer, default=0)  # 0 means manual/webhook only

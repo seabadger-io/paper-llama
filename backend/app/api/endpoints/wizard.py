@@ -46,6 +46,7 @@ class SetupWizardRequest(BaseModel):
     update_correspondent: bool = True
     update_document_type: bool = True
     update_tags: bool = True
+    max_tags: int = 5
     update_creation_date: bool = False
     document_word_limit: int = 1500
     schedule_interval_minutes: int

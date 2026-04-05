@@ -69,8 +69,8 @@ Dashboard.
   Currently available: Title, Correspondent, Document Type, Tags and Creation Date.
 
     **Note:** It will try to assign the best matching Correspondent and Document Type and up to 5
-    matching tags. It will only use the existing ones, never create new ones and if it can't find a
-    match it will leave the field unchanged.
+    matching tags (by default). It will only use the existing ones, never create new ones and if it
+    can't find a match it will leave the field unchanged.
 
 - **Max Retries:** The maximum number of retries per processing cycle if the AI query or saving the
   document fails. Applies to each separately. If a document processing fails even after the retries,
