@@ -41,8 +41,8 @@ export default {
                         <option :value="null">None</option>
                         <option v-for="t in availableTags" :key="t.id" :value="t.id">{{ t.name }}</option>
                     </select>
-                    <p class="mt-1 text-xs text-gray-500 italic">Force reprocessing already processed documents. The application keeps track of processed documents and will not process them again unless this tag is added.
-                    Query tag still applies, documents not having the query tag (if it's configured) are never processed.</p>
+                    <p class="mt-1 text-xs text-gray-500 italic">The application keeps track of processed documents and will filter them out unless this tag is added.
+                    Query tag still applies, if configured both tags must be present to re-process a document.</p>
                 </div>
             </div>
         </div>
