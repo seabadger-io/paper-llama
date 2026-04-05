@@ -15,7 +15,8 @@ vi.mock('../assets/api.js', () => ({
         getPaperlessUsers: vi.fn(),
         getPaperlessGroups: vi.fn(),
         triggerProcessing: vi.fn(),
-        getTriggerStats: vi.fn()
+        getTriggerStats: vi.fn(),
+        getAdminAccount: vi.fn()
     }
 }))
 
@@ -50,6 +51,7 @@ describe('Dashboard Component', () => {
         api.getPaperlessUsers.mockResolvedValue([])
         api.getPaperlessGroups.mockResolvedValue([])
         api.getTriggerStats.mockResolvedValue({ count: 5 })
+        api.getAdminAccount.mockResolvedValue({ username: 'admin' })
     })
     
     afterEach(() => {

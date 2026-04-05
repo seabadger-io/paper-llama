@@ -70,5 +70,11 @@ export const api = {
     },
     getTriggerStats() {
         return this.request('/admin/trigger/stats', 'GET', null, true);
+    },
+    getAdminAccount() {
+        return this.request('/admin/account', 'GET', null, true);
+    },
+    updateAdminAccount(data) {
+        return this.request('/admin/account', 'PUT', data, true);
     }
 };

@@ -4,13 +4,15 @@ import LoadingSpinner from '../components/LoadingSpinner.js';
 import ActivityLogs from '../components/ActivityLogs.js';
 import SettingsView from '../components/SettingsView.js';
 import TriggerModal from '../components/TriggerModal.js';
+import AccountSettings from '../components/AccountSettings.js';
 
 export default {
     components: {
         'loading-spinner': LoadingSpinner,
         'activity-logs': ActivityLogs,
         'settings-view': SettingsView,
-        'trigger-modal': TriggerModal
+        'trigger-modal': TriggerModal,
+        'account-settings': AccountSettings
     },
     mixins: [settingsMixin],
     template: `
@@ -27,6 +29,7 @@ export default {
                             <div class="h-8 w-px bg-gray-200 mx-2"></div>
                             <button @click="tab = 'logs'" :class="tab === 'logs' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'" class="px-4 py-2 rounded-t-md text-sm font-semibold transition-all h-16 flex items-center">Activity Logs</button>
                             <button @click="tab = 'settings'" :class="tab === 'settings' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'" class="px-4 py-2 rounded-t-md text-sm font-semibold transition-all h-16 flex items-center">Settings</button>
+                            <button @click="tab = 'account'" :class="tab === 'account' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'" class="px-4 py-2 rounded-t-md text-sm font-semibold transition-all h-16 flex items-center">Account</button>
                         </div>
                     </div>
                     <div class="flex items-center">
@@ -62,6 +65,13 @@ export default {
                     @test-paperless="testPaperless(false)"
                     @fetch-models="(b) => fetchModels(b)"
                 />
+
+                <!-- Account Tab -->
+                <account-settings 
+                    v-if="tab === 'account'" 
+                    :admin-account="adminAccount"
+                    @logout="logout"
+                />
             </div>
         </main>
 
@@ -80,6 +90,7 @@ export default {
             logs: [],
             processingDocs: [],
             settings: {},
+            adminAccount: { username: '' },
             serverTimezone: 'UTC',
             availableModels: [],
             availableTags: [],
@@ -113,14 +124,16 @@ export default {
             try {
                 this.loading = true;
                 this.error = '';
-                const [logData, processingData, settingData] = await Promise.all([
+                const [logData, processingData, settingData, accountData] = await Promise.all([
                     api.getLogs(),
                     api.getProcessing(),
-                    api.getSettings()
+                    api.getSettings(),
+                    api.getAdminAccount()
                 ]);
                 this.logs = logData;
                 this.processingDocs = processingData;
                 this.settings = settingData;
+                this.adminAccount = accountData;
                 this.serverTimezone = settingData.server_timezone || 'UTC';
 
                 await this.fetchModels(null);

@@ -7,7 +7,12 @@ from sqlalchemy.future import select
 
 from ...api.deps import get_current_user
 from ...core.config import settings as core_settings
-from ...core.scheduler import get_pending_documents_count, trigger_workflow, update_scheduler
+from ...core.scheduler import (
+    get_pending_documents_count,
+    trigger_workflow,
+    update_scheduler,
+)
+from ...core.security import get_password_hash, verify_password
 from ...db.models import AdminUser, AppSettings, DocumentChangeLog, ProcessedDocument
 from ...db.session import get_db
 
@@ -48,6 +53,16 @@ class SettingsUpdate(BaseModel):
     metadata_view_groups: list[int] = []
     metadata_edit_users: list[int] = []
     metadata_edit_groups: list[int] = []
+
+
+class AdminAccountInfo(BaseModel):
+    username: str
+
+
+class AdminAccountUpdate(BaseModel):
+    current_password: str
+    new_username: str | None = None
+    new_password: str | None = None
 
 
 class SetupStatus(BaseModel):
@@ -276,3 +291,39 @@ async def get_paperless_groups(
     except Exception as e:
         logger.error(f"Error fetching Paperless groups: {e}")
         return []
+
+
+@router.get("/account", response_model=AdminAccountInfo)
+async def get_admin_account_info(current_user: AdminUser = Depends(get_current_user)):
+    """Fetch the basic information for the currently logged in admin account."""
+    return {"username": current_user.username}
+
+
+@router.put("/account")
+async def update_admin_account(
+    update_data: AdminAccountUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user),
+):
+    """
+    Update admin username and/or password.
+    Requires the current password to be provided for security.
+    """
+    # Verify current password
+    if not verify_password(update_data.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Invalid current password")
+
+    if update_data.new_username:
+        # Check if username is already taken by someone else (if the table ever expands)
+        if update_data.new_username != current_user.username:
+            check_query = select(AdminUser).where(AdminUser.username == update_data.new_username)
+            check_res = await db.execute(check_query)
+            if check_res.scalar_one_or_none():
+                raise HTTPException(status_code=400, detail="Username already exists")
+            current_user.username = update_data.new_username
+
+    if update_data.new_password:
+        current_user.hashed_password = get_password_hash(update_data.new_password)
+
+    await db.commit()
+    return {"message": "Account updated successfully"}
