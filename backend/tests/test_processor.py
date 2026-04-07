@@ -69,6 +69,9 @@ def processor(mock_db_session, mock_settings):
     proc.paperless.get_tags.return_value = []
     proc.paperless.get_correspondents.return_value = []
     proc.paperless.get_document_types.return_value = []
+    proc.paperless.update_document.return_value = {}
+    proc.paperless.update_document_content.return_value = {}
+    proc.paperless.download_document.return_value = b""
 
     proc.ollama = AsyncMock()
     return proc
@@ -271,3 +274,127 @@ async def test_process_document_metadata_generation_document_owner(processor, mo
     processor.paperless.create_correspondent.assert_called_once()
     args, kwargs = processor.paperless.create_correspondent.call_args
     assert kwargs["owner"] == 5
+
+
+# --- Vision Fallback Reprocessing Tests ---
+
+
+@pytest.mark.asyncio
+async def test_ocr_force_mode_skips_text_prompt(processor, mock_settings, mocker):
+    """When vision_fallback=force, the standard text prompt should never be called."""
+    mock_settings.vision_fallback = "force"
+    mock_settings.vision_pages = 2
+    mock_settings.ai_backend = "ollama"
+    mock_settings.max_retries = 1
+
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = []
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+
+    processor.paperless.get_document.return_value = {
+        "id": 101,
+        "content": "Some existing text that should be ignored",
+        "title": "Scan 101",
+        "tags": [],
+        "correspondent": None,
+        "document_type": None,
+        "created": "2023-01-01",
+    }
+    # Simulate PDF bytes and mock PyMuPDF conversion
+    processor.paperless.download_document.return_value = b"%PDF-fake"
+    mock_pdf_to_images = mocker.patch(
+        "backend.app.services.processor._pdf_to_images_base64", return_value=["base64imgdata"]
+    )
+
+    processor.ollama.generate_completion.return_value = '{"title": "Vision Fallback Title"}'
+
+    await processor.process_document(101)
+
+    # PDF download must happen, standard prompt must NOT be called with text
+    processor.paperless.download_document.assert_called_once_with(101)
+    mock_pdf_to_images.assert_called_once_with(b"%PDF-fake", 2, document_id=101)
+    # AI was called with images
+    call_kwargs = processor.ollama.generate_completion.call_args
+    assert call_kwargs.kwargs.get("images") == ["base64imgdata"]
+    processor.paperless.update_document_content.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_vision_fallback_triggers_on_empty_content(processor, mock_settings, mocker):
+    """When vision_fallback=on and content is empty, Vision Fallback should run immediately."""
+    mock_settings.vision_fallback = "on"
+    mock_settings.vision_pages = 1
+    mock_settings.ai_backend = "ollama"
+    mock_settings.max_retries = 1
+
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = []
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+
+    processor.paperless.get_document.return_value = {
+        "id": 102,
+        "content": "",  # Empty!
+        "title": "Blank Scan",
+        "tags": [],
+        "correspondent": None,
+        "document_type": None,
+        "created": None,
+    }
+    processor.paperless.download_document.return_value = b"%PDF-fake"
+    mock_pdf_to_images = mocker.patch(
+        "backend.app.services.processor._pdf_to_images_base64", return_value=["img1"]
+    )
+    processor.ollama.generate_completion.return_value = '{"title": "Empty Doc Vision Fallback"}'
+
+    await processor.process_document(102)
+
+    processor.paperless.download_document.assert_called_once_with(102)
+    mock_pdf_to_images.assert_called_once()
+    call_kwargs = processor.ollama.generate_completion.call_args
+    assert call_kwargs.kwargs.get("images") == ["img1"]
+
+
+@pytest.mark.asyncio
+async def test_vision_fallback_triggers_when_ai_flags_poor_quality(processor, mock_settings, mocker):
+    """When vision_fallback=on, a second Vision Fallback pass is triggered if AI flags needs_vision_fallback=true."""
+    mock_settings.vision_fallback = "on"
+    mock_settings.vision_pages = 1
+    mock_settings.ai_backend = "ollama"
+    mock_settings.max_retries = 1
+
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = []
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+
+    processor.paperless.get_document.return_value = {
+        "id": 103,
+        "content": "XZq@#$ garbage text",  # Gibberish
+        "title": "Corrupted Scan",
+        "tags": [],
+        "correspondent": None,
+        "document_type": None,
+        "created": None,
+    }
+    processor.paperless.download_document.return_value = b"%PDF-fake"
+    mock_pdf_to_images = mocker.patch(
+        "backend.app.services.processor._pdf_to_images_base64", return_value=["imgdata"]
+    )
+
+    # First call: text-based, AI flags poor quality
+    # Second call: vision-based Vision Fallback pass
+    processor.ollama.generate_completion.side_effect = [
+        '{"title": "Bad", "needs_vision_fallback": true}',
+        '{"title": "Good Vision Fallback Title"}',
+    ]
+
+    await processor.process_document(103)
+
+    # generate_completion was called twice: once for text, once for Vision Fallback
+    assert processor.ollama.generate_completion.call_count == 2
+    # Second call should have images
+    mock_pdf_to_images.assert_called_once()
+    second_call_kwargs = processor.ollama.generate_completion.call_args_list[1].kwargs
+    assert second_call_kwargs.get("images") == ["imgdata"]

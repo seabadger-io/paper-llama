@@ -53,6 +53,8 @@ class SettingsUpdate(BaseModel):
     metadata_view_groups: list[int] = []
     metadata_edit_users: list[int] = []
     metadata_edit_groups: list[int] = []
+    vision_fallback: str = "off"
+    vision_pages: int = 3
 
 
 class AdminAccountInfo(BaseModel):
@@ -139,6 +141,8 @@ async def get_current_settings(
         metadata_view_groups=settings.metadata_view_groups or [],
         metadata_edit_users=settings.metadata_edit_users or [],
         metadata_edit_groups=settings.metadata_edit_groups or [],
+        vision_fallback=settings.vision_fallback or "off",
+        vision_pages=settings.vision_pages if settings.vision_pages is not None else 3,
     )
 
 
@@ -186,6 +190,8 @@ async def update_settings(
     app_settings.metadata_view_groups = settings_data.metadata_view_groups
     app_settings.metadata_edit_users = settings_data.metadata_edit_users
     app_settings.metadata_edit_groups = settings_data.metadata_edit_groups
+    app_settings.vision_fallback = settings_data.vision_fallback
+    app_settings.vision_pages = settings_data.vision_pages
 
     await db.commit()
 

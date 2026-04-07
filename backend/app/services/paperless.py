@@ -39,6 +39,14 @@ class PaperlessClient:
             response.raise_for_status()
             return response.json()
 
+    async def _get_bytes(self, endpoint: str, params: dict | None = None) -> bytes:
+        """Fetch raw bytes from a Paperless endpoint (e.g. for downloading documents)."""
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            url = f"{self.base_url}/api/{endpoint}"
+            response = await client.get(url, headers=self.headers, params=params)
+            response.raise_for_status()
+            return response.content
+
     async def _post(self, endpoint: str, json_data: dict) -> Any:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             url = f"{self.base_url}/api/{endpoint}"
@@ -118,6 +126,12 @@ class PaperlessClient:
     async def get_document(self, document_id: int) -> dict:
         return await self._get(f"documents/{document_id}/")
 
+    async def download_document(self, document_id: int) -> bytes:
+        """Download the processed (non-original) version of a document as raw bytes."""
+        return await self._get_bytes(
+            f"documents/{document_id}/download/", params={"original": "false"}
+        )
+
     # --- Update Documents ---
 
     async def update_document(
@@ -145,3 +159,7 @@ class PaperlessClient:
             return {}
 
         return await self._patch(f"documents/{document_id}/", update_data)
+
+    async def update_document_content(self, document_id: int, content: str) -> dict:
+        """Overwrite the stored content (OCR text) of a document."""
+        return await self._patch(f"documents/{document_id}/", {"content": content})

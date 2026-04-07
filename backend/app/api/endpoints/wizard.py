@@ -63,6 +63,8 @@ class SetupWizardRequest(BaseModel):
     metadata_view_groups: list[int] = []
     metadata_edit_users: list[int] = []
     metadata_edit_groups: list[int] = []
+    vision_fallback: str = "off"
+    vision_pages: int = 3
 
 
 @router.post("/wizard")
@@ -114,6 +116,8 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         metadata_view_groups=request.metadata_view_groups,
         metadata_edit_users=request.metadata_edit_users,
         metadata_edit_groups=request.metadata_edit_groups,
+        vision_fallback=request.vision_fallback,
+        vision_pages=request.vision_pages,
     )
     db.add(new_settings)
 

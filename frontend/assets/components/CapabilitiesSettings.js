@@ -1,5 +1,10 @@
+import VisionSettings from './VisionSettings.js';
+
 export default {
     name: 'CapabilitiesSettings',
+    components: {
+        'vision-settings': VisionSettings
+    },
     props: {
         modelValue: { type: Object, required: true },
         availableTags: { type: Array, default: () => [] }
@@ -55,6 +60,11 @@ export default {
                 <div class="flex items-center">
                     <input id="set_update_created" type="checkbox" v-model="modelValue.update_creation_date" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                     <label for="set_update_created" class="ml-2 block text-sm text-gray-900 font-medium">Update Creation Date</label>
+                </div>
+
+                <!-- Vision Fallback settings -->
+                <div class="border-t border-gray-100 pt-4 mt-4">
+                    <vision-settings v-model="modelValue" />
                 </div>
             </div>
         </div>

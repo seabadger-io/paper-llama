@@ -37,6 +37,9 @@ export default {
                                 <h3 class="text-sm font-semibold text-gray-900">
                                     {{ log.original_state?.title || 'Document ' + log.document_id }}
                                     <span class="text-[10px] font-normal text-gray-400 ml-2">#{{ log.document_id }}</span>
+                                    <span v-if="log.new_state?.used_vision_fallback" title="AI Vision Fallback" class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 uppercase tracking-tighter">
+                                        ✨ AI-Vision
+                                    </span>
                                 </h3>
                                 <p class="text-xs text-gray-500 font-medium">{{ formatDate(log.changed_at, serverTimezone) }}</p>
                             </div>

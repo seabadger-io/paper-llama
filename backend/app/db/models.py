@@ -59,6 +59,10 @@ class AppSettings(Base):
     force_process_tag_id = Column(Integer, nullable=True)  # Tag ID that forces reprocessing
     custom_prompt = Column(Text, nullable=True)  # Custom instructions for the AI
 
+    # Vision Fallback Settings
+    vision_fallback = Column(String, default="off")  # off, on, force
+    vision_pages = Column(Integer, default=3)  # Number of pages to render as images
+
     # Metadata Permissions
     metadata_use_system_defaults = Column(Boolean, default=True)
     metadata_owner_id = Column(Integer, nullable=True)

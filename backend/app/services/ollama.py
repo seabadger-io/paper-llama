@@ -22,14 +22,21 @@ class OllamaClient:
                 logger.error(f"Failed to fetch Ollama models: {e}")
                 raise
 
-    async def generate_completion(self, model: str, prompt: str, system: str = "") -> str:
-        """Send a prompt to Ollama and receive the generated text."""
+    async def generate_completion(
+        self, model: str, prompt: str, system: str = "", images: list[str] | None = None
+    ) -> str:
+        """Send a prompt to Ollama and receive the generated text.
+
+        images: optional list of base64-encoded image strings for vision models.
+        """
         payload = {
             "model": model,
             "prompt": prompt,
             "system": system,
             "stream": False,
         }
+        if images:
+            payload["images"] = images
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             try:

@@ -80,6 +80,15 @@ Dashboard.
   newly created tag will be owned by the user that Paper Llama is configured to use and it may not
   be visible to other users. Paper LLama can be configured to apply custom permissions when creating
   new metadata.
+- **AI Vision Fallback:** Choose between "off", "on" and "force".
+    - "off": Process the text content of the document, as stored in Paperless.
+    - "on": Process the text content of the document if any and if it's not usable Paper Llama
+      converts the document to images and tries to use AI Vision to analyze and classify the
+      content. This tends to be less accurate or detailed than using the text content, but can be
+      useful for documents with poor OCR quality (e.g. small ID documents with scattered text
+      contents).
+    - "force": Always convert the document to images and try to use AI Vision to analyze and
+      classify the content. This option ignores the OCR'd text content and should be rarely used.
 - **Max Retries:** The maximum number of retries per processing cycle if the AI query or saving the
   document fails. Applies to each separately. If a document processing fails even after the retries,
   it will be tried again at the end of the next processing cycle, after it finished processing any

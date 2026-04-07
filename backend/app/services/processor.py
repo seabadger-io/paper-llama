@@ -1,6 +1,8 @@
 import asyncio
+import base64
 import json
 import logging
+import os
 import re
 import time
 from datetime import UTC, datetime
@@ -12,7 +14,7 @@ from ..db.models import AppSettings, DocumentChangeLog, ProcessedDocument
 from .llamacpp import LlamaCppClient
 from .ollama import OllamaClient
 from .paperless import PaperlessClient
-from .prompt_builder import build_prompt
+from .prompt_builder import build_prompt, build_vision_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,46 @@ def fuzzy_match(name: str, available_items: list[dict]) -> dict | None:
         if normalize(item.get("name")) == normalized_name:
             return item
     return None
+
+
+def _pdf_to_images_base64(
+    pdf_bytes: bytes, max_pages: int, document_id: int | None = None
+) -> list[str]:
+    """Convert the first max_pages of a PDF to base64-encoded JPEG strings using PyMuPDF."""
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        raise RuntimeError(
+            "PyMuPDF is required for OCR reprocessing. Install it with: pip install PyMuPDF"
+        )
+
+    debug_mode = os.environ.get("DEBUG", "false").lower() == "true"
+    if debug_mode:
+        # On Windows, /tmp might not exist, ensure it does or use project local
+        tmp_dir = os.path.join(os.getcwd(), "tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
+        logger.info(f"DEBUG MODE: Saving images to {tmp_dir}")
+
+    images = []
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
+        n_pages = min(max_pages, len(doc))
+        for page_idx in range(n_pages):
+            page = doc.load_page(page_idx)
+            # Render at 2x resolution (144 dpi) for better OCR quality
+            mat = fitz.Matrix(2, 2)
+            pix = page.get_pixmap(matrix=mat)
+            jpeg_bytes = pix.tobytes("jpeg")
+
+            if debug_mode:
+                file_name = (
+                    f"doc_{document_id}_p{page_idx}.jpg" if document_id else f"page_{page_idx}.jpg"
+                )
+                save_path = os.path.join(tmp_dir, file_name)
+                pix.save(save_path)
+                logger.info(f"DEBUG MODE: Saved {save_path}")
+
+            images.append(base64.b64encode(jpeg_bytes).decode("utf-8"))
+    return images
 
 
 class DocumentProcessor:
@@ -77,6 +119,63 @@ class DocumentProcessor:
             DocumentProcessor._metadata_cache["document_types"],
         )
 
+    async def _call_ai(self, prompt: str, images: list[str] | None = None) -> str:
+        """Call the configured AI backend and return the raw response text."""
+        system_prompt = "You are a document classification AI. You output valid JSON only."
+        if self.settings.ai_backend == "llamacpp":
+            return await self.llamacpp.generate_completion(
+                model=self.settings.llamacpp_model,
+                prompt=prompt,
+                system=system_prompt,
+                images=images,
+            )
+        else:
+            return await self.ollama.generate_completion(
+                model=self.settings.ollama_model,
+                prompt=prompt,
+                system=system_prompt,
+                images=images,
+            )
+
+    def _parse_ai_response(self, ai_response_text: str) -> dict:
+        """Extract and parse the JSON object from the AI response."""
+        if "```json" in ai_response_text:
+            json_str = ai_response_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in ai_response_text:
+            json_str = ai_response_text.split("```")[1].split("```")[0].strip()
+        else:
+            json_str = ai_response_text.strip()
+        return json.loads(json_str)
+
+    async def _run_vision_pass(
+        self,
+        document_id: int,
+        doc: dict,
+        tags: list[dict],
+        correspondents: list[dict],
+        document_types: list[dict],
+        prompt_tags: list[dict],
+    ) -> tuple[dict, str, str]:
+        """Download the document, render pages to images, and call the vision model.
+
+        Returns (ai_data, vision_prompt, ai_response_text).
+        """
+        logger.info(f"Running vision fallback pass for document {document_id}")
+
+        max_pages = self.settings.vision_pages if self.settings.vision_pages else 3
+
+        # Download document and convert to images
+        pdf_bytes = await self.paperless.download_document(document_id)
+        images = _pdf_to_images_base64(pdf_bytes, max_pages, document_id=document_id)
+
+        vision_prompt = build_vision_prompt(
+            self.settings, prompt_tags, correspondents, document_types
+        )
+        ai_response_text = await self._call_ai(vision_prompt, images=images)
+        ai_data = self._parse_ai_response(ai_response_text)
+
+        return ai_data, vision_prompt, ai_response_text
+
     async def process_document(self, document_id: int):
         """Main processing flow for a single document."""
         logger.info(f"Processing document {document_id}")
@@ -91,50 +190,57 @@ class DocumentProcessor:
         original_state = {}
         new_state = {}
         update_kwargs = {}
+        vision_mode = getattr(self.settings, "vision_fallback", "off")
 
         for attempt in range(max_retries):
             try:
                 # 1. Fetch document and metadata if we haven't already
                 if not ai_response_text:
                     doc = await self.paperless.get_document(document_id)
-                    doc_content = doc.get("content", "")
+                    doc_content = doc.get("content", "") or ""
 
                     tags, correspondents, document_types = await self.get_cached_metadata()
 
-                    # 2. Query Ollama
                     prompt_tags = [
                         t
                         for t in tags
                         if t["id"]
                         not in (self.settings.query_tag_id, self.settings.force_process_tag_id)
                     ]
-                    prompt = build_prompt(
-                        self.settings, doc_content, prompt_tags, correspondents, document_types
-                    )
-                    system_prompt = (
-                        "You are a document classification AI. You output valid JSON only."
+
+                    # 2. Decide workflow path
+                    use_vision_immediately = vision_mode == "force" or (
+                        vision_mode == "on" and not doc_content.strip()
                     )
 
                     start_time = time.perf_counter()
-                    if self.settings.ai_backend == "llamacpp":
-                        ai_response_text = await self.llamacpp.generate_completion(
-                            model=self.settings.llamacpp_model, prompt=prompt, system=system_prompt
+                    vision_used = False
+
+                    if use_vision_immediately:
+                        # Vision-first path: skip text prompt entirely
+                        vision_used = True
+                        ai_data, prompt, ai_response_text = await self._run_vision_pass(
+                            document_id, doc, tags, correspondents, document_types, prompt_tags
                         )
                     else:
-                        ai_response_text = await self.ollama.generate_completion(
-                            model=self.settings.ollama_model, prompt=prompt, system=system_prompt
+                        # Standard text-based path
+                        prompt = build_prompt(
+                            self.settings, doc_content, prompt_tags, correspondents, document_types
                         )
+                        ai_response_text = await self._call_ai(prompt)
+                        ai_data = self._parse_ai_response(ai_response_text)
+
+                        # If vision_mode == "on" and AI flagged the text as poor quality, run vision pass
+                        if vision_mode == "on" and ai_data.get("needs_vision_fallback"):
+                            logger.info(
+                                f"AI flagged document {document_id} as needing vision fallback"
+                            )
+                            vision_used = True
+                            ai_data, prompt, ai_response_text = await self._run_vision_pass(
+                                document_id, doc, tags, correspondents, document_types, prompt_tags
+                            )
+
                     ai_processing_time_ms = int((time.perf_counter() - start_time) * 1000)
-
-                    # Find JSON block if Ollama adds markdown
-                    if "```json" in ai_response_text:
-                        json_str = ai_response_text.split("```json")[1].split("```")[0].strip()
-                    elif "```" in ai_response_text:
-                        json_str = ai_response_text.split("```")[1].split("```")[0].strip()
-                    else:
-                        json_str = ai_response_text.strip()
-
-                    ai_data = json.loads(json_str)
 
                     # 3. Figure out updates
                     original_state = {
@@ -317,6 +423,9 @@ class DocumentProcessor:
 
                 if new_state.get("ai_generated"):
                     log_new["ai_generated"] = new_state.get("ai_generated")
+
+                if vision_used:
+                    log_new["used_vision_fallback"] = True
 
                 # Log changes
                 log_entry = DocumentChangeLog(

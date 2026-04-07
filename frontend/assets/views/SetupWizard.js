@@ -132,7 +132,9 @@ export default {
                 metadata_view_users: [],
                 metadata_view_groups: [],
                 metadata_edit_users: [],
-                metadata_edit_groups: []
+                metadata_edit_groups: [],
+                vision_fallback: 'off',
+                vision_pages: 3
             },
             confirm_password: '',
             availableModels: [],

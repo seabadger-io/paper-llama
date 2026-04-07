@@ -28,12 +28,31 @@ class LlamaCppClient:
                 logger.error(f"Failed to fetch llama.cpp models: {e}")
                 raise
 
-    async def generate_completion(self, model: str, prompt: str, system: str = "") -> str:
-        """Send a prompt to llama.cpp and receive the generated text."""
+    async def generate_completion(
+        self, model: str, prompt: str, system: str = "", images: list[str] | None = None
+    ) -> str:
+        """Send a prompt to llama.cpp and receive the generated text.
+
+        images: optional list of base64-encoded image strings for vision models.
+                They are embedded using the OpenAI vision message format.
+        """
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+
+        if images:
+            # OpenAI vision format: content is a list of content parts
+            content_parts = [{"type": "text", "text": prompt}]
+            for img_b64 in images:
+                content_parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
+                    }
+                )
+            messages.append({"role": "user", "content": content_parts})
+        else:
+            messages.append({"role": "user", "content": prompt})
 
         payload = {
             "model": model,
