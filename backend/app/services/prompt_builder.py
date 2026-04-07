@@ -29,29 +29,37 @@ def build_prompt(
         prompt_parts.append(f"AVAILABLE TAGS (ID:Name): {tags_str}")
 
     prompt_parts.append(
-        "\nRULES:\n* You MUST respond with ONLY valid JSON and absolutely NO extra text, comments, or markdown blocks outside the JSON."
+        "\nRULES:\n* You MUST respond with ONLY valid JSON and absolutely NO extra text,"
+        " comments, or markdown blocks outside the JSON."
     )
 
     if settings.update_correspondent:
         prompt_parts.append(
-            "* Select EXACTLY ONE correspondent ID, or null if absolutely none match. If you are not sure, select null. Do not guess. Consider if the document contains any of the existing correspondent names (either in it's short or long form), especially in the first part of the document."
+            "* Select EXACTLY ONE primary correspondent ID, or null if absolutely none match."
+            " If you are not sure, select null. Accept variations of existing correspondent"
+            " names, e.g. long form, short form, abbreviations, etc."
         )
     if settings.update_document_type:
         prompt_parts.append(
-            "* Select EXACTLY ONE document type ID, or null if absolutely none match."
+            "* Select EXACTLY ONE matching document type ID, or null if absolutely none match."
         )
     if settings.update_tags:
         prompt_parts.append(
-            f"* Select maximum {settings.max_tags} tag IDs that best describe the document. Only select tags if they are actually relevant to the document. Don't select tags just because they are available or because they are in the document. Select tags that can be used to identify and categorize the document. For example, an employment contract should not be tagged as pension even if pension is mentioned in the document."
+            f"* Select maximum {settings.max_tags} tag IDs that best describe the document."
+            " Only select tags if they are relevant to the document's primary purpose"
+            " (e.g. don't tag a car sale contract as insurance; don't tag an employment"
+            " contract as pension)."
         )
     if settings.update_title:
         prompt_parts.append(
             "* Extract a short, concise title for the document based on its contents."
         )
     if settings.update_creation_date:
-        prompt_parts.append("* Try to identify the document creation date. If unsure, return null.")
+        prompt_parts.append(
+            "* Try to identify the document creation date. If unsure, return null."
+        )
 
-    # Adding AI Generation rules
+    # AI Generation rules
     generate_corr = (
         getattr(settings, "generate_correspondent", False) and settings.update_correspondent
     )
@@ -63,28 +71,38 @@ def build_prompt(
     if generate_corr or generate_dtype or generate_tags:
         prompt_parts.append("\nAI GENERATION RULES:")
         prompt_parts.append(
-            "* For correspondent, document_type, and tags, much prefer choosing existing ones if at all possible."
+            "* For correspondent, document_type, and tags, prefer choosing existing ones if possible."
         )
         if generate_corr:
             prompt_parts.append(
-                "* Only suggest a new correspondent in `ai_recommended.correspondent` if you are very confident about it."
+                "* If the primary correspondent can be clearly identified (seller, issuer, etc.),"
+                " but is not present in the AVAILABLE CORRESPONDENTS list, suggest it in"
+                " ai_recommended.correspondent. When suggesting a new correspondent, be specific,"
+                " but not verbose."
             )
         if generate_dtype:
             prompt_parts.append(
-                "* Only suggest a new document type in `ai_recommended.document_type` if it is generic enough to apply to other documents in the future (don't be too specific)."
+                "* If you could not select a good match from the AVAILABLE DOCUMENT TYPES list"
+                " suggest a new document type in `ai_recommended.document_type`. Create universally"
+                " applicable document types (e.g. 'Invoice' and not 'Invoice from Company X')."
             )
         if generate_tags:
             prompt_parts.append(
-                "* Only suggest new tags in `ai_recommended.tags` if they are both specific enough to help categorize and generic enough to apply to multiple documents and there's no similar, existing tag."
+                "* Suggest new tags in `ai_recommended.tags` if they would be both specific"
+                " enough to help categorize and generic enough to apply to multiple documents."
+                " Do not suggest a new tag if there is already a similar tag in the AVAILABLE TAGS list."
+                " Do not suggest new tags if already picked {settings.max_tags} tags from the"
+                " AVAILABLE TAGS list."
             )
         prompt_parts.append(
-            "* When suggesting new metadata, consider the format (case, pluralization, dash vs space, etc.) and language of the existing available ones."
+            "* When suggesting new metadata, consider the format (case, pluralization, dash"
+            " vs space, etc.) and language of the existing available ones."
         )
         prompt_parts.append(
-            "* If you are not sure about any of the metadata, return null for that field."
+            "* If you are not confident about any of the metadata, return null for that field."
         )
 
-    prompt_parts.append("\nEXPECTED JSON FORMAT:")
+    prompt_parts.append("\nEXPECTED JSON FORMAT (only ever return these keys):")
 
     json_format = {}
     if settings.update_title:
