@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/assets/logo.png" width="150" alt="Paper Llama Logo">
+</p>
+
 # Paper Llama
 
 Paper Llama is a companion application for **Paperless-ngx**. Using an external LLM running on

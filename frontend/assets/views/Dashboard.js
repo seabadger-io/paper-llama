@@ -22,6 +22,7 @@ export default {
                 <div class="flex justify-between h-16">
                     <div class="flex">
                         <div class="flex-shrink-0 flex items-center font-bold text-blue-600 text-xl tracking-tight">
+                            <img src="/assets/logo.png" alt="Logo" class="h-8 w-8 mr-2 object-contain">
                             Paper Llama
                         </div>
                         <div class="ml-10 flex items-center space-x-4">
