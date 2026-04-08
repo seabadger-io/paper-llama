@@ -27,9 +27,9 @@ export default {
                         <div class="ml-10 flex items-center space-x-4">
                             <button @click="openTriggerModal" class="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-bold uppercase tracking-wide hover:bg-green-700 transition shadow-sm">Trigger Processing</button>
                             <div class="h-8 w-px bg-gray-200 mx-2"></div>
-                            <button @click="tab = 'logs'" :class="tab === 'logs' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'" class="px-4 py-2 rounded-t-md text-sm font-semibold transition-all h-16 flex items-center">Activity Logs</button>
-                            <button @click="tab = 'settings'" :class="tab === 'settings' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'" class="px-4 py-2 rounded-t-md text-sm font-semibold transition-all h-16 flex items-center">Settings</button>
-                            <button @click="tab = 'account'" :class="tab === 'account' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'" class="px-4 py-2 rounded-t-md text-sm font-semibold transition-all h-16 flex items-center">Account</button>
+                            <button @click="$router.push('/dashboard/logs')" :class="$route.path.includes('/logs') ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'" class="px-4 py-2 rounded-t-md text-sm font-semibold transition-all h-16 flex items-center">Activity Logs</button>
+                            <button @click="$router.push('/dashboard/settings')" :class="$route.path.includes('/settings') ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'" class="px-4 py-2 rounded-t-md text-sm font-semibold transition-all h-16 flex items-center">Settings</button>
+                            <button @click="$router.push('/dashboard/account')" :class="$route.path.includes('/account') ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'" class="px-4 py-2 rounded-t-md text-sm font-semibold transition-all h-16 flex items-center">Account</button>
                         </div>
                     </div>
                     <div class="flex items-center">
@@ -42,36 +42,29 @@ export default {
         <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
             <div v-if="loading" class="flex justify-center py-12"><loading-spinner/></div>
             <div v-else>
-                <!-- Activity Logs Tab -->
-                <activity-logs 
-                    v-if="tab === 'logs'" 
-                    :logs="logs" 
-                    :processing-docs="processingDocs" 
-                    :server-timezone="serverTimezone"
-                />
-
-                <!-- Settings Tab -->
-                <settings-view 
-                    v-if="tab === 'settings'" 
-                    v-model="settings"
-                    v-model:message="message"
-                    :available-models="availableModels"
-                    :available-tags="availableTags"
-                    :available-users="availableUsers"
-                    :available-groups="availableGroups"
-                    :paperless-status="paperlessStatus"
-                    :error="error"
-                    @save="saveSettings"
-                    @test-paperless="testPaperless(false)"
-                    @fetch-models="(b) => fetchModels(b)"
-                />
-
-                <!-- Account Tab -->
-                <account-settings 
-                    v-if="tab === 'account'" 
-                    :admin-account="adminAccount"
-                    @logout="logout"
-                />
+                <router-view v-slot="{ Component }">
+                    <component 
+                        :is="Component"
+                        :logs="logs"
+                        :processing-docs="processingDocs"
+                        :server-timezone="serverTimezone"
+                        :modelValue="settings"
+                        @update:modelValue="settings = $event"
+                        :message="message"
+                        @update:message="message = $event"
+                        :available-models="availableModels"
+                        :available-tags="availableTags"
+                        :available-users="availableUsers"
+                        :available-groups="availableGroups"
+                        :paperless-status="paperlessStatus"
+                        :error="error"
+                        :admin-account="adminAccount"
+                        @save="saveSettings"
+                        @test-paperless="testPaperless(false)"
+                        @fetch-models="(b) => fetchModels(b)"
+                        @logout="logout"
+                    />
+                </router-view>
             </div>
         </main>
 
@@ -86,7 +79,6 @@ export default {
     </div>`,
     data() {
         return {
-            tab: 'logs',
             logs: [],
             processingDocs: [],
             settings: {},
@@ -109,7 +101,7 @@ export default {
     async mounted() {
         await this.loadData();
         this.logInterval = setInterval(() => {
-            if (this.tab === 'logs') {
+            if (this.$route.path.includes('/logs')) {
                 this.refreshLogs();
             }
         }, 15000);

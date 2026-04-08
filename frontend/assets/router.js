@@ -1,6 +1,9 @@
 import SetupWizard from './views/SetupWizard.js';
 import Login from './views/Login.js';
 import Dashboard from './views/Dashboard.js';
+import ActivityLogs from './components/ActivityLogs.js';
+import SettingsView from './components/SettingsView.js';
+import AccountSettings from './components/AccountSettings.js';
 import { api } from './api.js';
 
 const routes = [
@@ -38,7 +41,13 @@ const routes = [
             const token = localStorage.getItem('token');
             if (!token) next('/login');
             else next();
-        }
+        },
+        children: [
+            { path: '', redirect: '/dashboard/logs' },
+            { path: 'logs', component: ActivityLogs, name: 'dashboard-logs' },
+            { path: 'settings', component: SettingsView, name: 'dashboard-settings' },
+            { path: 'account', component: AccountSettings, name: 'dashboard-account' }
+        ]
     }
 ];
 

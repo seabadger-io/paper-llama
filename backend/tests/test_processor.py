@@ -357,7 +357,9 @@ async def test_vision_fallback_triggers_on_empty_content(processor, mock_setting
 
 
 @pytest.mark.asyncio
-async def test_vision_fallback_triggers_when_ai_flags_poor_quality(processor, mock_settings, mocker):
+async def test_vision_fallback_triggers_when_ai_flags_poor_quality(
+    processor, mock_settings, mocker
+):
     """When vision_fallback=on, a second Vision Fallback pass is triggered if AI flags needs_vision_fallback=true."""
     mock_settings.vision_fallback = "on"
     mock_settings.vision_pages = 1

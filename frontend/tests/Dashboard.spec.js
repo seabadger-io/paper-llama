@@ -1,6 +1,10 @@
+import { reactive } from 'vue'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import Dashboard from '../assets/views/Dashboard.js'
+import ActivityLogs from '../assets/components/ActivityLogs.js';
+import SettingsView from '../assets/components/SettingsView.js';
+import AccountSettings from '../assets/components/AccountSettings.js';
 import { api } from '../assets/api.js'
 
 vi.mock('../assets/api.js', () => ({
@@ -22,6 +26,7 @@ vi.mock('../assets/api.js', () => ({
 
 describe('Dashboard Component', () => {
     let mockRouter;
+    let mockRoute;
     
     beforeEach(() => {
         vi.clearAllMocks()
@@ -35,6 +40,10 @@ describe('Dashboard Component', () => {
         mockRouter = {
             push: vi.fn()
         }
+        mockRoute = reactive({
+            path: '/dashboard/logs',
+            name: 'dashboard-logs'
+        })
         
         // Default API mock returns for mount
         api.getLogs.mockResolvedValue([])
@@ -62,9 +71,21 @@ describe('Dashboard Component', () => {
         const wrapper = mount(Dashboard, {
             global: {
                 mocks: {
-                    $router: mockRouter
+                    $router: mockRouter,
+                    $route: mockRoute
                 },
-                components: {
+                stubs: {
+                    'router-view': {
+                        template: '<slot :Component="currentComponent"></slot>',
+                        computed: {
+                            currentComponent() {
+                                if (this.$route.path.includes('/logs')) return 'activity-logs';
+                                if (this.$route.path.includes('/settings')) return 'settings-view';
+                                if (this.$route.path.includes('/account')) return 'account-settings';
+                                return null;
+                            }
+                        }
+                    },
                     LoadingSpinner: { template: '<div class="spinner">Mock Spinner</div>' }
                 }
             }
@@ -118,8 +139,12 @@ describe('Dashboard Component', () => {
     it('navigates to settings tab and saves settings', async () => {
         const wrapper = await createWrapper()
         
-        // Switch to settings
-        await wrapper.setData({ tab: 'settings' })
+        // Switch to settings via route mock
+        mockRoute.path = '/dashboard/settings'
+        await wrapper.vm.$forceUpdate() // Force re-render with new route mock state if needed
+        // Since we are unit testing Dashboard, we check if it pushes to router
+        await wrapper.find('button:nth-child(4)').trigger('click') // Settings button
+        expect(mockRouter.push).toHaveBeenCalledWith('/dashboard/settings')
         
         expect(wrapper.text()).toContain('Application Settings')
         
@@ -134,9 +159,7 @@ describe('Dashboard Component', () => {
         const wrapper = await createWrapper()
         
         // Switch to settings
-        await wrapper.setData({ tab: 'settings' })
-        
-        // Switch to llamacpp
+        mockRoute.path = '/dashboard/settings'
         await wrapper.setData({ settings: { ...wrapper.vm.settings, ai_backend: 'llamacpp', llamacpp_url: 'http://llama:8080' } })
         await flushPromises()
         
@@ -181,6 +204,11 @@ describe('Dashboard Component', () => {
         
         vi.advanceTimersByTime(15000)
         expect(api.getLogs).toHaveBeenCalledTimes(2) // Interval tick
+        
+        // Change route away from logs
+        mockRoute.path = '/dashboard/settings'
+        vi.advanceTimersByTime(15000)
+        expect(api.getLogs).toHaveBeenCalledTimes(2) // Should NOT call refreshLogs if not on logs path
         
         wrapper.unmount()
         vi.advanceTimersByTime(15000)
