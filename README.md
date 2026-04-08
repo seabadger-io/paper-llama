@@ -69,12 +69,13 @@ Dashboard.
     E.g. the change document access is not enough if the document has an owner set and the Paper
     LLama user is not added as an editor either directly or via a group.
 
-- **AI Backend:** Choose between Ollama and Llama.cpp.
-- **Ollama AI Config:** The base URL to your local Ollama deployment (e.g.
-  `http://localhost:11434`), the LLM model to use (I had good results with `gpt-oss:20b` on
-  relatively modest hardware), and the timeout in seconds.
+- **AI Backend:** Currently supported are Ollama and Llama.cpp.
+- **Ollama AI Config:** Enter the base URL to your local Ollama deployment (e.g.
+  `http://localhost:11434`), select the LLM model from the models that are current available on your
+  instance (I had good results with `gpt-oss:20b` and more recently with `gemma-4-E4B` on modest
+  hardware), and the timeout in seconds.
 - **Llama.cpp AI Config:** The base URL to your local Llama.cpp deployment (e.g.
-  `http://localhost:8080`), the LLM model to use, and the timeout in seconds.
+  `http://localhost:8080`), the LLM model, and the timeout in seconds.
 - **AI Capabilities Checkboxes:** Choose exactly which fields the AI assistant is allowed to modify.
   Currently available: Title, Correspondent, Document Type, Tags and Creation Date. By default, it
   will only use the existing values and if it can't find a match it will leave the field unchanged.
