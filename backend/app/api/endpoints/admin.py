@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -235,7 +236,12 @@ async def get_change_logs(
     db: AsyncSession = Depends(get_db),
     current_user: AdminUser = Depends(get_current_user),
 ):
-    """Fetch the document change logs."""
+    """Fetch the document change logs with pagination."""
+    # Count total logs
+    count_query = select(func.count()).select_from(DocumentChangeLog)
+    count_result = await db.execute(count_query)
+    total = count_result.scalar()
+
     query = (
         select(DocumentChangeLog)
         .order_by(DocumentChangeLog.changed_at.desc())
@@ -245,16 +251,21 @@ async def get_change_logs(
     result = await db.execute(query)
     logs = result.scalars().all()
 
-    return [
-        {
-            "id": log.id,
-            "document_id": log.document_id,
-            "changed_at": log.changed_at,
-            "original_state": log.original_state,
-            "new_state": log.new_state,
-        }
-        for log in logs
-    ]
+    return {
+        "logs": [
+            {
+                "id": log.id,
+                "document_id": log.document_id,
+                "changed_at": log.changed_at,
+                "original_state": log.original_state,
+                "new_state": log.new_state,
+            }
+            for log in logs
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/paperless/users")

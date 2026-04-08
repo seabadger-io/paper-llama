@@ -3,10 +3,27 @@ import { settingsMixin } from '../mixins/settingsMixin.js';
 export default {
     props: {
         logs: { type: Array, required: true },
+        logsTotal: { type: Number, required: true },
+        logsLimit: { type: Number, required: true },
+        logsOffset: { type: Number, required: true },
         processingDocs: { type: Array, required: true },
         serverTimezone: { type: String, default: 'UTC' }
     },
     mixins: [settingsMixin],
+    computed: {
+        startRange() {
+            return this.logsTotal === 0 ? 0 : this.logsOffset + 1;
+        },
+        endRange() {
+            return Math.min(this.logsOffset + this.logsLimit, this.logsTotal);
+        },
+        totalPages() {
+            return Math.ceil(this.logsTotal / this.logsLimit);
+        },
+        currentPage() {
+            return Math.floor(this.logsOffset / this.logsLimit) + 1;
+        }
+    },
     template: `
         <div class="bg-white shadow overflow-hidden sm:rounded-md p-6">
             <!-- Currently Processing Section -->
@@ -99,6 +116,29 @@ export default {
                     </div>
                 </li>
             </ul>
+
+            <!-- Pagination Section -->
+            <div v-if="logsTotal > 0" class="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
+                <div class="text-sm text-gray-700">
+                    Showing <span class="font-medium">{{ startRange }}</span> to <span class="font-medium">{{ endRange }}</span> of <span class="font-medium">{{ logsTotal }}</span> entries
+                </div>
+                <div class="flex-1 flex justify-end space-x-3">
+                    <button 
+                        @click="$emit('change-page', Math.max(0, logsOffset - logsLimit))"
+                        :disabled="logsOffset === 0"
+                        class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
+                    >
+                        Previous
+                    </button>
+                    <button 
+                        @click="$emit('change-page', logsOffset + logsLimit)"
+                        :disabled="currentPage >= totalPages"
+                        class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
+                    >
+                        Next
+                    </button>
+                </div>
+            </div>
         </div>
     `
 };

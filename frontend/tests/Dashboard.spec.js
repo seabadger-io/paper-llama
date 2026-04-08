@@ -42,11 +42,17 @@ describe('Dashboard Component', () => {
         }
         mockRoute = reactive({
             path: '/dashboard/logs',
-            name: 'dashboard-logs'
+            name: 'dashboard-logs',
+            query: {}
         })
         
         // Default API mock returns for mount
-        api.getLogs.mockResolvedValue([])
+        api.getLogs.mockResolvedValue({
+            logs: [],
+            total: 0,
+            limit: 20,
+            offset: 0
+        })
         api.getProcessing.mockResolvedValue([])
         api.getSettings.mockResolvedValue({
             paperless_url: 'http://paperless',
@@ -107,18 +113,23 @@ describe('Dashboard Component', () => {
     })
 
     it('displays parsed log data correctly', async () => {
-        api.getLogs.mockResolvedValueOnce([{
-            id: 1,
-            document_id: 100,
-            changed_at: '2023-01-01T12:00:00Z',
-            original_state: { title: 'Invoice' },
-            new_state: { 
-                title: 'Processed Invoice', 
-                ai_processing_time_ms: 1500,
-                tags: ['200 (AI Tag)', '300 (Manual Tag)'],
-                ai_generated: { tags: [200] }
-            }
-        }])
+        api.getLogs.mockResolvedValueOnce({
+            logs: [{
+                id: 1,
+                document_id: 100,
+                changed_at: '2023-01-01T12:00:00Z',
+                original_state: { title: 'Invoice' },
+                new_state: { 
+                    title: 'Processed Invoice', 
+                    ai_processing_time_ms: 1500,
+                    tags: ['200 (AI Tag)', '300 (Manual Tag)'],
+                    ai_generated: { tags: [200] }
+                }
+            }],
+            total: 1,
+            limit: 20,
+            offset: 0
+        })
         
         const wrapper = await createWrapper()
         
@@ -222,5 +233,50 @@ describe('Dashboard Component', () => {
         
         expect(localStorage.removeItem).toHaveBeenCalledWith('token')
         expect(mockRouter.push).toHaveBeenCalledWith('/login')
+    })
+
+    it('navigates through log pages via router', async () => {
+        api.getLogs.mockResolvedValue({
+            logs: [],
+            total: 50,
+            limit: 20,
+            offset: 0
+        })
+        const wrapper = await createWrapper()
+        
+        // Initial state
+        expect(wrapper.text()).toContain('Showing 1 to 20 of 50 entries')
+        
+        // Click Next
+        const nextButton = wrapper.findAll('button').find(b => b.text().includes('Next'))
+        await nextButton.trigger('click')
+        
+        // Should push to router instead of calling API directly
+        expect(mockRouter.push).toHaveBeenCalledWith({
+            path: '/dashboard/logs',
+            query: { page: 2 }
+        })
+
+        // Simulate watcher triggering (as it would in a real browser)
+        mockRoute.query.page = 2
+        await flushPromises()
+        
+        expect(api.getLogs).toHaveBeenCalledWith(20, 20)
+        expect(wrapper.text()).toContain('Showing 21 to 40 of 50 entries')
+    })
+
+    it('initializes logs offset from query parameter on mount', async () => {
+        mockRoute.query.page = 3
+        api.getLogs.mockResolvedValue({
+            logs: [],
+            total: 100,
+            limit: 20,
+            offset: 40
+        })
+        
+        const wrapper = await createWrapper()
+        
+        expect(api.getLogs).toHaveBeenCalledWith(20, 40)
+        expect(wrapper.text()).toContain('Showing 41 to 60 of 100 entries')
     })
 })

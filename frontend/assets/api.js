@@ -53,8 +53,8 @@ export const api = {
     updateSettings(data) {
         return this.request('/admin/settings', 'PUT', data, true);
     },
-    getLogs(limit = 50) {
-        return this.request(`/admin/logs?limit=${limit}`, 'GET', null, true);
+    getLogs(limit = 20, offset = 0) {
+        return this.request(`/admin/logs?limit=${limit}&offset=${offset}`, 'GET', null, true);
     },
     getProcessing() {
         return this.request('/admin/processing', 'GET', null, true);

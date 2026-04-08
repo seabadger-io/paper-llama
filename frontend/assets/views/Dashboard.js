@@ -47,6 +47,9 @@ export default {
                     <component 
                         :is="Component"
                         :logs="logs"
+                        :logs-total="logsTotal"
+                        :logs-limit="logsLimit"
+                        :logs-offset="logsOffset"
                         :processing-docs="processingDocs"
                         :server-timezone="serverTimezone"
                         :modelValue="settings"
@@ -63,6 +66,7 @@ export default {
                         @save="saveSettings"
                         @test-paperless="testPaperless(false)"
                         @fetch-models="(b) => fetchModels(b)"
+                        @change-page="changePage"
                         @logout="logout"
                     />
                 </router-view>
@@ -81,6 +85,9 @@ export default {
     data() {
         return {
             logs: [],
+            logsTotal: 0,
+            logsLimit: 20,
+            logsOffset: 0,
             processingDocs: [],
             settings: {},
             adminAccount: { username: '' },
@@ -100,9 +107,12 @@ export default {
         };
     },
     async mounted() {
+        const page = parseInt(this.$route.query.page) || 1;
+        this.logsOffset = (page - 1) * this.logsLimit;
+
         await this.loadData();
         this.logInterval = setInterval(() => {
-            if (this.$route.path.includes('/logs')) {
+            if (this.$route.path.includes('/logs') && this.logsOffset === 0) {
                 this.refreshLogs();
             }
         }, 15000);
@@ -112,18 +122,34 @@ export default {
             clearInterval(this.logInterval);
         }
     },
+    watch: {
+        '$route.query.page': {
+            async handler(newPage) {
+                if (!this.$route.path.includes('/logs')) return;
+
+                const page = parseInt(newPage) || 1;
+                const newOffset = (page - 1) * this.logsLimit;
+
+                if (this.logsOffset !== newOffset) {
+                    this.logsOffset = newOffset;
+                    await this.refreshLogs();
+                }
+            }
+        }
+    },
     methods: {
         async loadData() {
             try {
                 this.loading = true;
                 this.error = '';
-                const [logData, processingData, settingData, accountData] = await Promise.all([
-                    api.getLogs(),
+                const [logResponse, processingData, settingData, accountData] = await Promise.all([
+                    api.getLogs(this.logsLimit, this.logsOffset),
                     api.getProcessing(),
                     api.getSettings(),
                     api.getAdminAccount()
                 ]);
-                this.logs = logData;
+                this.logs = logResponse.logs;
+                this.logsTotal = logResponse.total;
                 this.processingDocs = processingData;
                 this.settings = settingData;
                 this.adminAccount = accountData;
@@ -143,17 +169,26 @@ export default {
         },
         async refreshLogs() {
             try {
-                const [logData, processingData] = await Promise.all([
-                    api.getLogs(),
+                const [logResponse, processingData] = await Promise.all([
+                    api.getLogs(this.logsLimit, this.logsOffset),
                     api.getProcessing()
                 ]);
-                this.logs = logData;
+                this.logs = logResponse.logs;
+                this.logsTotal = logResponse.total;
                 this.processingDocs = processingData;
             } catch (e) {
                 if (e.message !== 'Unauthorized') {
                     console.error('Background log refresh failed:', e);
                 }
             }
+        },
+        async changePage(newOffset) {
+            const page = Math.floor(newOffset / this.logsLimit) + 1;
+            this.$router.push({
+                path: '/dashboard/logs',
+                query: { page: page > 1 ? page : undefined }
+            });
+            window.scrollTo(0, 0);
         },
         async openTriggerModal() {
             try {

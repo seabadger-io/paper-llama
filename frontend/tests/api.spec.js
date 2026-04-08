@@ -49,7 +49,7 @@ describe('api.js HTTP Wrapper', () => {
         await api.getLogs()
         
         expect(localStorage.getItem).toHaveBeenCalledWith('token')
-        expect(global.fetch).toHaveBeenCalledWith('/api/admin/logs?limit=50', {
+        expect(global.fetch).toHaveBeenCalledWith('/api/admin/logs?limit=20&offset=0', {
             method: 'GET',
             headers: { 
                 'Content-Type': 'application/json',
