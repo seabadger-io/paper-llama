@@ -134,7 +134,7 @@ export const settingsMixin = {
                     hour12: false,
                     timeZone: timezone
                 }).format(date);
-            } catch (e) {
+            } catch {
                 return new Date(dateStr).toLocaleString();
             }
         }

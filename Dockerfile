@@ -1,5 +1,14 @@
-FROM python:3.11-slim
+# Build Frontend Assets (Tailwind compilation)
+FROM node:20-slim AS frontend-builder
+WORKDIR /build
+COPY package*.json ./
+RUN npm install --ignore-scripts
+COPY tailwind.config.js ./
+COPY frontend/ ./frontend/
+RUN npm run build:css
 
+# Main Python Runner Image
+FROM python:3.11-slim
 WORKDIR /app
 
 # Install dependencies
@@ -9,6 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy source code
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
+# Overwrite style.css with the compiled version from Stage 1
+COPY --from=frontend-builder /build/frontend/assets/style.css ./frontend/assets/style.css
 COPY reset_admin.py .
 
 # Create directory for SQLite database
