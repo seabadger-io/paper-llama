@@ -193,13 +193,13 @@ async def trigger_workflow(from_webhook=False):
                     logger.info("Processing was queued. Starting another cycle.")
                     processing_queued = False
                 else:
-                    is_processing = False
                     break
     except Exception as e:
+        logger.error(f"Critical error in workflow trigger: {e}")
+    finally:
         async with processing_lock:
             is_processing = False
             processing_queued = False
-        logger.error(f"Critical error in workflow trigger: {e}")
 
 
 def update_scheduler(interval_minutes: int):

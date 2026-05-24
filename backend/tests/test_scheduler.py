@@ -114,3 +114,74 @@ async def test_run_processing_cycle_reprocesses_stale_docs(
     # document 101 (stale) should be processed
     # document 102 (fresh) should be skipped
     mock_processor_instance.process_document.assert_called_once_with(101)
+
+
+@pytest.mark.asyncio
+@patch("backend.app.core.scheduler._run_processing_cycle")
+async def test_trigger_workflow_success_resets_is_processing(mock_run_cycle):
+    import backend.app.core.scheduler as scheduler_mod
+
+    # Reset states
+    scheduler_mod.is_processing = False
+    scheduler_mod.processing_queued = False
+
+    mock_run_cycle.return_value = None
+
+    await scheduler_mod.trigger_workflow()
+
+    assert mock_run_cycle.call_count == 1
+    assert scheduler_mod.is_processing is False
+    assert scheduler_mod.processing_queued is False
+
+
+@pytest.mark.asyncio
+@patch("backend.app.core.scheduler._run_processing_cycle")
+async def test_trigger_workflow_resets_is_processing_on_max_retries(mock_run_cycle):
+    import backend.app.core.scheduler as scheduler_mod
+
+    # Reset states
+    scheduler_mod.is_processing = False
+    scheduler_mod.processing_queued = False
+
+    # Make the cycle raise an exception every time
+    mock_run_cycle.side_effect = Exception("Processing failed")
+
+    # We also mock asyncio.sleep to avoid waiting 10s between retries
+    with patch("backend.app.core.scheduler.asyncio.sleep", AsyncMock()) as mock_sleep:
+        await scheduler_mod.trigger_workflow()
+
+        # Verify that run_processing_cycle was called 3 times (max_retries)
+        assert mock_run_cycle.call_count == 3
+        # Verify that sleep was called 2 times (between the 3 attempts)
+        assert mock_sleep.call_count == 2
+        # Verify that is_processing is reset to False
+        assert scheduler_mod.is_processing is False
+        assert scheduler_mod.processing_queued is False
+
+
+@pytest.mark.asyncio
+@patch("backend.app.core.scheduler._run_processing_cycle")
+async def test_trigger_workflow_queues_and_runs_again(mock_run_cycle):
+    import backend.app.core.scheduler as scheduler_mod
+
+    # Reset states
+    scheduler_mod.is_processing = False
+    scheduler_mod.processing_queued = False
+
+    # We want the first cycle to queue a new request
+    # To do this, we can set processing_queued to True during the execution of _run_processing_cycle
+    call_count = 0
+    async def side_effect_run():
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            scheduler_mod.processing_queued = True
+
+    mock_run_cycle.side_effect = side_effect_run
+
+    await scheduler_mod.trigger_workflow()
+
+    # It should run twice: once for the initial call, and once for the queued call
+    assert mock_run_cycle.call_count == 2
+    assert scheduler_mod.is_processing is False
+    assert scheduler_mod.processing_queued is False
