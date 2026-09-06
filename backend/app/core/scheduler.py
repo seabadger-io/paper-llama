@@ -83,8 +83,17 @@ async def _run_processing_cycle():
             logger.warning("Job skipped: Paperless URL or Token is not configured.")
             return
 
-        if not settings.ollama_url or not settings.ollama_model:
-            logger.warning("Job skipped: Ollama URL or Model is not configured.")
+        ai_backend = settings.ai_backend or "ollama"
+        if ai_backend == "llamacpp":
+            if not settings.llamacpp_url or not settings.llamacpp_model:
+                logger.warning("Job skipped: Llama.cpp URL or Model is not configured.")
+                return
+        elif ai_backend == "ollama":
+            if not settings.ollama_url or not settings.ollama_model:
+                logger.warning("Job skipped: Ollama URL or Model is not configured.")
+                return
+        else:
+            logger.warning(f"Job skipped: Invalid AI backend '{ai_backend}'.")
             return
 
         # We need processing state from DB to avoid re-processing and handle retries

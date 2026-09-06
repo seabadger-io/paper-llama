@@ -185,3 +185,103 @@ async def test_trigger_workflow_queues_and_runs_again(mock_run_cycle):
     assert mock_run_cycle.call_count == 2
     assert scheduler_mod.is_processing is False
     assert scheduler_mod.processing_queued is False
+
+
+@pytest.mark.asyncio
+@patch("backend.app.core.scheduler.AsyncSessionLocal")
+@patch("backend.app.core.scheduler.DocumentProcessor")
+async def test_run_processing_cycle_llamacpp_backend(
+    mock_document_processor_class, mock_async_session_local
+):
+    settings = AppSettings()
+    settings.paperless_url = "http://test"
+    settings.paperless_token = "token"
+    settings.ai_backend = "llamacpp"
+    settings.ollama_url = None
+    settings.ollama_model = None
+    settings.llamacpp_url = "http://llamacpp:8080"
+    settings.llamacpp_model = "test-llama-model"
+    settings.query_tag_id = 999
+
+    mock_session = AsyncMock()
+    mock_async_session_local.return_value.__aenter__.return_value = mock_session
+
+    mock_result_settings = MagicMock()
+    mock_result_settings.scalar_one_or_none.return_value = settings
+
+    mock_result_proc = MagicMock()
+    mock_result_proc.all.return_value = []
+
+    mock_session.execute.side_effect = [mock_result_settings, mock_result_proc]
+
+    mock_processor_instance = AsyncMock()
+    mock_document_processor_class.return_value = mock_processor_instance
+    mock_processor_instance.get_cached_metadata.return_value = (
+        [{"id": 999, "name": "query"}],
+        [],
+        [],
+    )
+    mock_processor_instance.paperless.get_documents.return_value = []
+
+    await _run_processing_cycle()
+
+    mock_processor_instance.get_cached_metadata.assert_called_once()
+    mock_processor_instance.paperless.get_documents.assert_called_once()
+
+
+@pytest.mark.asyncio
+@patch("backend.app.core.scheduler.AsyncSessionLocal")
+@patch("backend.app.core.scheduler.DocumentProcessor")
+async def test_run_processing_cycle_llamacpp_missing_config(
+    mock_document_processor_class, mock_async_session_local
+):
+    settings = AppSettings()
+    settings.paperless_url = "http://test"
+    settings.paperless_token = "token"
+    settings.ai_backend = "llamacpp"
+    settings.llamacpp_url = "http://llamacpp:8080"
+    settings.llamacpp_model = None  # Missing model
+
+    mock_session = AsyncMock()
+    mock_async_session_local.return_value.__aenter__.return_value = mock_session
+
+    mock_result_settings = MagicMock()
+    mock_result_settings.scalar_one_or_none.return_value = settings
+
+    mock_session.execute.return_value = mock_result_settings
+
+    mock_processor_instance = AsyncMock()
+    mock_document_processor_class.return_value = mock_processor_instance
+
+    await _run_processing_cycle()
+
+    mock_processor_instance.get_cached_metadata.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("backend.app.core.scheduler.AsyncSessionLocal")
+@patch("backend.app.core.scheduler.DocumentProcessor")
+async def test_run_processing_cycle_invalid_ai_backend(
+    mock_document_processor_class, mock_async_session_local
+):
+    settings = AppSettings()
+    settings.paperless_url = "http://test"
+    settings.paperless_token = "token"
+    settings.ai_backend = "unknown_backend"
+
+    mock_session = AsyncMock()
+    mock_async_session_local.return_value.__aenter__.return_value = mock_session
+
+    mock_result_settings = MagicMock()
+    mock_result_settings.scalar_one_or_none.return_value = settings
+
+    mock_session.execute.return_value = mock_result_settings
+
+    mock_processor_instance = AsyncMock()
+    mock_document_processor_class.return_value = mock_processor_instance
+
+    await _run_processing_cycle()
+
+    mock_processor_instance.get_cached_metadata.assert_not_called()
+
+
