@@ -57,14 +57,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Paper Llama API", lifespan=lifespan)
 
-# Allow CORS for local dev
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Allow CORS for local dev only
+if os.environ.get("DEBUG", "false").lower() == "true":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # API Router (includes all sub-routers)
 app.include_router(api_router, prefix="/api")
