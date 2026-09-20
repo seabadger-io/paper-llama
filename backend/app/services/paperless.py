@@ -120,8 +120,7 @@ class PaperlessClient:
         if tags:
             params["tags__id__in"] = ",".join(map(str, tags))
 
-        data = await self._get("documents/", params=params)
-        return data.get("results", [])
+        return await self._get_all("documents/", params=params)
 
     async def get_document(self, document_id: int) -> dict:
         return await self._get(f"documents/{document_id}/")
