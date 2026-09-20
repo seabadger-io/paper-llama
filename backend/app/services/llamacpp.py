@@ -59,6 +59,7 @@ class LlamaCppClient:
             "messages": messages,
             "stream": False,
             "temperature": 0.0,
+            "response_format": {"type": "json_object"},
         }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:

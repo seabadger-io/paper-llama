@@ -40,6 +40,7 @@ async def test_generate_completion(mocker, llamacpp_client):
             ],
             "stream": False,
             "temperature": 0.0,
+            "response_format": {"type": "json_object"},
         },
     )
     assert response_text == "This is a completion"

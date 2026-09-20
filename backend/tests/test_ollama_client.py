@@ -36,6 +36,7 @@ async def test_generate_completion(mocker, ollama_client):
             "prompt": "Tell me a joke",
             "system": "You are an assistant",
             "stream": False,
+            "format": "json",
         },
     )
     assert response_text == "This is a completion"

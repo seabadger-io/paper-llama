@@ -34,6 +34,7 @@ class OllamaClient:
             "prompt": prompt,
             "system": system,
             "stream": False,
+            "format": "json",
         }
         if images:
             payload["images"] = images
