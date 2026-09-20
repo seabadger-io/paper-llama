@@ -160,7 +160,7 @@ docker exec -it paper-llama python reset_admin.py
 python reset_admin.py
 ```
 
-Note: the script will look for the database in `data/paper-llama.db`.
+Note: the script will look for the database in `data/paper_llama.db`.
 
 ## Testing
 
