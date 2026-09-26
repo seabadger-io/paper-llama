@@ -6,13 +6,27 @@ logger = logging.getLogger(__name__)
 
 
 class LlamaCppClient:
-    def __init__(self, base_url: str = "http://localhost:8080", timeout: float = 300.0):
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8080",
+        timeout: float = 300.0,
+        api_key: str | None = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout = float(timeout)  # AI generation can be slow
+        self.api_key = api_key
+
+    def _get_headers(self) -> dict[str, str]:
+        if not self.api_key:
+            return {}
+        token = self.api_key.strip()
+        if token.lower().startswith("bearer "):
+            return {"Authorization": token}
+        return {"Authorization": f"Bearer {token}"}
 
     async def get_models(self) -> list[dict]:
         """Fetch available models from the llama.cpp instance."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._get_headers()) as client:
             try:
                 response = await client.get(f"{self.base_url}/v1/models")
                 response.raise_for_status()
@@ -62,7 +76,7 @@ class LlamaCppClient:
             "response_format": {"type": "json_object"},
         }
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, headers=self._get_headers()) as client:
             try:
                 response = await client.post(f"{self.base_url}/v1/chat/completions", json=payload)
                 response.raise_for_status()

@@ -18,10 +18,14 @@ logger = logging.getLogger(__name__)
 
 class TestOllamaRequest(BaseModel):
     ollama_url: str
+    ollama_api_key: str | None = None
+    api_key: str | None = None
 
 
 class TestLlamacppRequest(BaseModel):
     llamacpp_url: str
+    llamacpp_api_key: str | None = None
+    api_key: str | None = None
 
 
 class TestPaperlessRequest(BaseModel):
@@ -38,9 +42,11 @@ class SetupWizardRequest(BaseModel):
     ollama_url: str
     ollama_model: str
     ollama_timeout: int = 300
+    ollama_api_key: str | None = None
     llamacpp_url: str = "http://localhost:8080"
     llamacpp_model: str | None = None
     llamacpp_timeout: int = 300
+    llamacpp_api_key: str | None = None
     max_retries: int = 3
     update_title: bool = True
     update_correspondent: bool = True
@@ -91,9 +97,11 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         ollama_url=request.ollama_url,
         ollama_model=request.ollama_model,
         ollama_timeout=request.ollama_timeout,
+        ollama_api_key=request.ollama_api_key,
         llamacpp_url=request.llamacpp_url,
         llamacpp_model=request.llamacpp_model,
         llamacpp_timeout=request.llamacpp_timeout,
+        llamacpp_api_key=request.llamacpp_api_key,
         max_retries=request.max_retries,
         update_title=request.update_title,
         update_correspondent=request.update_correspondent,
@@ -129,7 +137,10 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
 @router.post("/test-ollama")
 async def test_ollama(request: TestOllamaRequest):
     """Test Ollama connection and fetch available models."""
-    client = OllamaClient(base_url=request.ollama_url)
+    client = OllamaClient(
+        base_url=request.ollama_url,
+        api_key=request.ollama_api_key or request.api_key,
+    )
     try:
         models = await client.get_models()
         return {"status": "ok", "models": [m.get("name") for m in models]}
@@ -141,7 +152,10 @@ async def test_ollama(request: TestOllamaRequest):
 @router.post("/test-llamacpp")
 async def test_llamacpp(request: TestLlamacppRequest):
     """Test Llama.cpp connection and fetch available models."""
-    client = LlamaCppClient(base_url=request.llamacpp_url)
+    client = LlamaCppClient(
+        base_url=request.llamacpp_url,
+        api_key=request.llamacpp_api_key or request.api_key,
+    )
     try:
         models = await client.get_models()
         return {"status": "ok", "models": [m.get("name", m.get("id")) for m in models]}

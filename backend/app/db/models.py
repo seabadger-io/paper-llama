@@ -33,11 +33,13 @@ class AppSettings(Base):
     ollama_url = Column(String, default="http://localhost:11434")
     ollama_model = Column(String, nullable=True)
     ollama_timeout = Column(Integer, default=300)
+    ollama_api_key = Column(String, nullable=True)
 
     # Llama.cpp Settings
     llamacpp_url = Column(String, default="http://localhost:8080")
     llamacpp_model = Column(String, nullable=True)
     llamacpp_timeout = Column(Integer, default=300)
+    llamacpp_api_key = Column(String, nullable=True)
 
     # Processing Settings
     max_retries = Column(Integer, default=3)

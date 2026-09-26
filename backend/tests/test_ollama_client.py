@@ -55,3 +55,37 @@ async def test_get_models(mocker, ollama_client):
     models = await ollama_client.get_models()
     assert len(models) == 1
     assert models[0]["name"] == "llama3"
+
+
+def test_ollama_headers():
+    client_no_key = OllamaClient()
+    assert client_no_key._get_headers() == {}
+
+    client_with_key = OllamaClient(api_key="ollama-secret")
+    assert client_with_key._get_headers() == {"Authorization": "Bearer ollama-secret"}
+
+    client_bearer_key = OllamaClient(api_key="Bearer custom-ollama-token")
+    assert client_bearer_key._get_headers() == {"Authorization": "Bearer custom-ollama-token"}
+
+
+@pytest.mark.asyncio
+async def test_ollama_passes_auth_header_to_client(mocker):
+    client = OllamaClient(base_url="http://test:11434", api_key="secret-ollama-key")
+
+    mock_response = mocker.Mock()
+    mock_response.json.return_value = {"models": []}
+    mock_response.raise_for_status = mocker.Mock()
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.get.return_value = mock_response
+
+    mock_async_client = mocker.patch("httpx.AsyncClient")
+    mock_async_client.return_value.__aenter__.return_value = mock_client_instance
+
+    await client.get_models()
+
+    mock_async_client.assert_called_once_with(
+        timeout=300.0,
+        headers={"Authorization": "Bearer secret-ollama-key"},
+    )
+

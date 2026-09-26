@@ -85,6 +85,8 @@ async def test_get_current_settings_handles_none_for_creation_date():
         document_word_limit=1500,
         schedule_interval_minutes=0,
         ollama_url="http://ollama",
+        ollama_api_key="test-ollama-key",
+        llamacpp_api_key="test-llamacpp-key",
     )
     mock_db = MockDB(mock_settings)
 
@@ -95,6 +97,8 @@ async def test_get_current_settings_handles_none_for_creation_date():
     assert result.generate_correspondent is False
     assert result.generate_document_type is False
     assert result.generate_tags is False
+    assert result.ollama_api_key == "test-ollama-key"
+    assert result.llamacpp_api_key == "test-llamacpp-key"
 
 
 @pytest.mark.asyncio
@@ -110,6 +114,8 @@ async def test_update_settings(mocker):
         remove_query_tag=False,
         ollama_url="http://new-ollama",
         ollama_timeout=600,
+        ollama_api_key="new-key",
+        llamacpp_api_key="new-llama-key",
         schedule_interval_minutes=15,
     )
 
@@ -119,4 +125,8 @@ async def test_update_settings(mocker):
     assert mock_settings.paperless_url == "http://new-url"
     assert mock_settings.schedule_interval_minutes == 15
     assert mock_settings.ollama_timeout == 600
+    assert mock_settings.ollama_api_key == "new-key"
+    assert mock_settings.llamacpp_api_key == "new-llama-key"
     assert mock_db.commit_called_count == 1
+
+

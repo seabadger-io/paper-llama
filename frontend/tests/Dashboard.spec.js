@@ -186,6 +186,28 @@ describe('Dashboard Component', () => {
         expect(wrapper.vm.availableModels).toEqual(['llama-model'])
     })
 
+    it('passes API key when testing AI backend if configured', async () => {
+        const wrapper = await createWrapper()
+        mockRoute.path = '/dashboard/settings'
+        await wrapper.setData({
+            settings: {
+                ...wrapper.vm.settings,
+                ai_backend: 'llamacpp',
+                llamacpp_url: 'http://llama:8080',
+                llamacpp_api_key: 'sk-secret-token',
+            },
+        })
+        await flushPromises()
+
+        api.testLlamacpp.mockResolvedValueOnce({ models: ['llama-model'] })
+        await wrapper.vm.fetchModels('llamacpp', true)
+
+        expect(api.testLlamacpp).toHaveBeenCalledWith({
+            llamacpp_url: 'http://llama:8080',
+            llamacpp_api_key: 'sk-secret-token',
+        })
+    })
+
     it('renders the trigger processing modal with correct count', async () => {
         const wrapper = await createWrapper()
         

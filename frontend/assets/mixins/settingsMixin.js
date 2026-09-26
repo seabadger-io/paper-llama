@@ -16,9 +16,13 @@ export const settingsMixin = {
                 this.error = '';
                 let res;
                 if (activeBackend === 'llamacpp') {
-                    res = await api.testLlamacpp({ llamacpp_url: target.llamacpp_url });
+                    const payload = { llamacpp_url: target.llamacpp_url };
+                    if (target.llamacpp_api_key) payload.llamacpp_api_key = target.llamacpp_api_key;
+                    res = await api.testLlamacpp(payload);
                 } else {
-                    res = await api.testOllama({ ollama_url: target.ollama_url });
+                    const payload = { ollama_url: target.ollama_url };
+                    if (target.ollama_api_key) payload.ollama_api_key = target.ollama_api_key;
+                    res = await api.testOllama(payload);
                 }
                 this.availableModels = res.models;
 

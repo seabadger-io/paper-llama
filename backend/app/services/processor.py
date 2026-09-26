@@ -87,10 +87,12 @@ class DocumentProcessor:
         self.ollama = OllamaClient(
             base_url=settings.ollama_url or "http://localhost:11434",
             timeout=float(settings.ollama_timeout) if settings.ollama_timeout else 300.0,
+            api_key=getattr(settings, "ollama_api_key", None),
         )
         self.llamacpp = LlamaCppClient(
             base_url=settings.llamacpp_url or "http://localhost:8080",
             timeout=float(settings.llamacpp_timeout) if settings.llamacpp_timeout else 300.0,
+            api_key=getattr(settings, "llamacpp_api_key", None),
         )
 
     async def get_cached_metadata(self):

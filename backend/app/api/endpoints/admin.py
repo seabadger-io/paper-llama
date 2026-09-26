@@ -28,9 +28,11 @@ class SettingsUpdate(BaseModel):
     ollama_url: str = "http://localhost:11434"
     ollama_model: str | None = None
     ollama_timeout: int = 300
+    ollama_api_key: str | None = None
     llamacpp_url: str = "http://localhost:8080"
     llamacpp_model: str | None = None
     llamacpp_timeout: int = 300
+    llamacpp_api_key: str | None = None
     max_retries: int = 3
     update_title: bool = True
     update_correspondent: bool = True
@@ -104,6 +106,7 @@ async def get_current_settings(
         ollama_url=settings.ollama_url,
         ollama_model=settings.ollama_model,
         ollama_timeout=settings.ollama_timeout if settings.ollama_timeout is not None else 300,
+        ollama_api_key=settings.ollama_api_key,
         llamacpp_url=settings.llamacpp_url
         if settings.llamacpp_url is not None
         else "http://localhost:8080",
@@ -111,6 +114,7 @@ async def get_current_settings(
         llamacpp_timeout=settings.llamacpp_timeout
         if settings.llamacpp_timeout is not None
         else 300,
+        llamacpp_api_key=settings.llamacpp_api_key,
         max_retries=settings.max_retries if settings.max_retries is not None else 3,
         update_title=settings.update_title,
         update_correspondent=settings.update_correspondent,
@@ -166,9 +170,14 @@ async def update_settings(
     app_settings.ollama_url = settings_data.ollama_url
     app_settings.ollama_model = settings_data.ollama_model
     app_settings.ollama_timeout = settings_data.ollama_timeout
+    if settings_data.ollama_api_key is not None:
+        app_settings.ollama_api_key = settings_data.ollama_api_key
+
     app_settings.llamacpp_url = settings_data.llamacpp_url
     app_settings.llamacpp_model = settings_data.llamacpp_model
     app_settings.llamacpp_timeout = settings_data.llamacpp_timeout
+    if settings_data.llamacpp_api_key is not None:
+        app_settings.llamacpp_api_key = settings_data.llamacpp_api_key
     app_settings.max_retries = settings_data.max_retries
     app_settings.update_title = settings_data.update_title
     app_settings.update_correspondent = settings_data.update_correspondent
