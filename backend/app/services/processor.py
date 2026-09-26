@@ -139,13 +139,36 @@ class DocumentProcessor:
 
     def _parse_ai_response(self, ai_response_text: str) -> dict:
         """Extract and parse the JSON object from the AI response."""
+        if not ai_response_text or not ai_response_text.strip():
+            logger.error("AI response was empty or whitespace only.")
+            raise ValueError("AI response was empty")
+
         if "```json" in ai_response_text:
             json_str = ai_response_text.split("```json")[1].split("```")[0].strip()
         elif "```" in ai_response_text:
             json_str = ai_response_text.split("```")[1].split("```")[0].strip()
         else:
             json_str = ai_response_text.strip()
-        return json.loads(json_str)
+
+        try:
+            parsed = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            preview = ai_response_text[:300] + ("..." if len(ai_response_text) > 300 else "")
+            logger.error(
+                f"Failed to parse JSON from AI response: {e}. Raw response snippet: {preview!r}"
+            )
+            raise ValueError(f"Invalid JSON returned by AI ({e}): {preview!r}") from e
+
+        if not isinstance(parsed, dict):
+            preview = ai_response_text[:300] + ("..." if len(ai_response_text) > 300 else "")
+            logger.error(
+                f"Expected JSON object (dict) from AI response, got {type(parsed).__name__}. Raw response snippet: {preview!r}"
+            )
+            raise ValueError(
+                f"AI response must be a JSON object, got {type(parsed).__name__}: {preview!r}"
+            )
+
+        return parsed
 
     async def _run_vision_pass(
         self,
@@ -261,8 +284,23 @@ class DocumentProcessor:
                         if self.settings.update_document_type and "document_type_id" in ai_data
                         else original_state["document_type"]
                     )
-                    ai_recommended = ai_data.get("ai_recommended", {})
-                    new_tag_ids = ai_data.get("tag_ids", []) if self.settings.update_tags else []
+                    ai_recommended = ai_data.get("ai_recommended")
+                    if not isinstance(ai_recommended, dict):
+                        if ai_recommended is not None:
+                            logger.warning(
+                                f"Doc {document_id}: expected dict for 'ai_recommended', got {type(ai_recommended).__name__}"
+                            )
+                        ai_recommended = {}
+
+                    raw_tag_ids = ai_data.get("tag_ids")
+                    if isinstance(raw_tag_ids, list):
+                        new_tag_ids = raw_tag_ids if self.settings.update_tags else []
+                    else:
+                        if raw_tag_ids is not None:
+                            logger.warning(
+                                f"Doc {document_id}: expected list for 'tag_ids', got {type(raw_tag_ids).__name__}"
+                            )
+                        new_tag_ids = []
                     ai_generated_log = {}
 
                     # Resolve metadata owner and permissions
@@ -321,11 +359,12 @@ class DocumentProcessor:
 
                         ai_generated_log["document_type"] = new_dtype_id
 
-                    if ai_recommended.get("tags") and getattr(
+                    rec_tags = ai_recommended.get("tags")
+                    if isinstance(rec_tags, list) and getattr(
                         self.settings, "generate_tags", False
                     ):
                         ai_generated_log["tags"] = []
-                        for tag_name in ai_recommended["tags"]:
+                        for tag_name in rec_tags:
                             match = fuzzy_match(tag_name, tags)
                             if match:
                                 new_tag_ids.append(match["id"])
@@ -443,12 +482,27 @@ class DocumentProcessor:
                 return
 
             except Exception as e:
-                err_str = str(e) or type(e).__name__
-                logger.warning(f"Attempt {attempt + 1} failed for doc {document_id}: {err_str}")
+                err_type = type(e).__name__
+                err_msg = str(e)
+                err_str = f"{err_type}: {err_msg}" if err_msg else err_type
+
+                response_preview = ""
+                if ai_response_text:
+                    clean_text = ai_response_text.strip()
+                    preview_text = (
+                        clean_text[:300] + "..." if len(clean_text) > 300 else clean_text
+                    )
+                    response_preview = f" | Raw AI response snippet: {preview_text!r}"
+
+                logger.warning(
+                    f"Attempt {attempt + 1}/{max_retries} failed for doc {document_id}: {err_str}{response_preview}",
+                    exc_info=True,
+                )
                 if attempt == max_retries - 1:
                     await self.db.rollback()
                     logger.error(
-                        f"Failed all {max_retries} attempts for doc {document_id}: {err_str}"
+                        f"Failed all {max_retries} attempts for doc {document_id}: {err_str}{response_preview}",
+                        exc_info=True,
                     )
                     await self._mark_processed(document_id, "error", err_str)
 
@@ -465,6 +519,7 @@ class DocumentProcessor:
                     self.db.add(log_entry)
                     await self.db.commit()
                 else:
+                    ai_response_text = None
                     await asyncio.sleep(2)
 
     async def _mark_processed(self, document_id: int, status: str, error_message: str = None):

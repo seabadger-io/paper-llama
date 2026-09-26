@@ -400,3 +400,91 @@ async def test_vision_fallback_triggers_when_ai_flags_poor_quality(
     mock_pdf_to_images.assert_called_once()
     second_call_kwargs = processor.ollama.generate_completion.call_args_list[1].kwargs
     assert second_call_kwargs.get("images") == ["imgdata"]
+
+
+def test_parse_ai_response_valid(processor):
+    parsed = processor._parse_ai_response('```json\n{"title": "Test Doc"}\n```')
+    assert parsed == {"title": "Test Doc"}
+
+
+@pytest.mark.parametrize(
+    "raw_input,expected_match",
+    [
+        ("", "empty"),
+        ("   ", "empty"),
+        ("not json at all", "Invalid JSON"),
+        ("null", "JSON object"),
+        ("```json\nnull\n```", "JSON object"),
+        ("[1, 2, 3]", "JSON object"),
+    ],
+)
+def test_parse_ai_response_invalid_inputs(processor, raw_input, expected_match):
+    with pytest.raises(ValueError, match=expected_match):
+        processor._parse_ai_response(raw_input)
+
+
+@pytest.mark.asyncio
+async def test_process_document_handles_null_recommendations(processor):
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = []
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+
+    processor.paperless.get_document.return_value = {
+        "id": 142,
+        "content": "Test invoice",
+        "title": "Old Title",
+        "tags": [],
+        "correspondent": None,
+        "document_type": None,
+        "created": None,
+    }
+    # LLM returned null for ai_recommended and tag_ids
+    processor.ollama.generate_completion.return_value = (
+        '{"title": "New Title", "ai_recommended": null, "tag_ids": null}'
+    )
+
+    await processor.process_document(142)
+
+    processor.paperless.update_document.assert_called_once()
+    kwargs = processor.paperless.update_document.call_args.kwargs
+    assert kwargs["title"] == "New Title"
+    assert kwargs["tags"] == []
+
+
+@pytest.mark.asyncio
+async def test_process_document_logs_traceback_and_ai_preview_on_error(
+    processor, mock_settings, mocker
+):
+    mock_settings.max_retries = 1
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = []
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+
+    processor.paperless.get_document.return_value = {
+        "id": 143,
+        "content": "Invoice",
+        "title": "Title",
+        "tags": [],
+    }
+    processor.ollama.generate_completion.return_value = "Non-JSON response from LLM"
+
+    mock_logger_error = mocker.patch("backend.app.services.processor.logger.error")
+    mock_logger_warning = mocker.patch("backend.app.services.processor.logger.warning")
+
+    await processor.process_document(143)
+
+    # Both warning and error should have been called with exc_info=True
+    assert mock_logger_warning.called
+    warn_call = mock_logger_warning.call_args
+    assert warn_call.kwargs.get("exc_info") is True
+    assert "Raw AI response snippet" in warn_call.args[0]
+    assert "Non-JSON response from LLM" in warn_call.args[0]
+
+    assert mock_logger_error.called
+    err_call = mock_logger_error.call_args
+    assert err_call.kwargs.get("exc_info") is True
+    assert "Raw AI response snippet" in err_call.args[0]
+    assert "Non-JSON response from LLM" in err_call.args[0]
+
