@@ -6,6 +6,7 @@ from backend.app.core.scheduler import (
     _build_document_queue,
     _run_processing_cycle,
     get_pending_documents_count,
+    perform_log_maintenance,
 )
 from backend.app.db.models import AppSettings
 
@@ -384,6 +385,31 @@ async def test_build_document_queue_classification(mock_settings):
     # error_docs: [3 (error), 5 (stale processing)]
     # queue = new_docs + error_docs = [2, 6, 3, 5]
     assert queue == [2, 6, 3, 5]
+
+
+@pytest.mark.asyncio
+async def test_perform_log_maintenance(mock_settings):
+    mock_session = AsyncMock()
+
+    mock_settings.log_retention_days = 90
+    mock_settings.log_compact_after_days = 30
+
+    # del_res rowcount = 4, compact_res rowcount = 8
+    mock_del_res = MagicMock()
+    mock_del_res.rowcount = 4
+
+    mock_compact_res = MagicMock()
+    mock_compact_res.rowcount = 8
+
+    mock_session.execute.side_effect = [mock_del_res, mock_compact_res]
+
+    stats = await perform_log_maintenance(session=mock_session, settings=mock_settings)
+
+    assert stats["deleted_logs"] == 4
+    assert stats["compacted_logs"] == 8
+    assert mock_session.execute.call_count == 2
+    mock_session.commit.assert_called_once()
+
 
 
 

@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import ActivityLogs from '../assets/components/ActivityLogs.js';
+import { api } from '../assets/api.js';
 
 describe('ActivityLogs Component', () => {
     const baseProps = {
@@ -131,4 +132,59 @@ describe('ActivityLogs Component', () => {
         expect(wrapper.text()).toContain('210 prompt');
         expect(wrapper.text()).toContain('30 completion');
     });
+
+    it('opens AI details modal on click and fetches log details on demand', async () => {
+        const log = {
+            id: 42,
+            document_id: 1042,
+            changed_at: '2026-09-27T10:00:00Z',
+            original_state: { title: 'Invoice 1042' },
+            new_state: { title: 'Invoice 1042 Clean' }
+        };
+
+        const detailsResponse = {
+            id: 42,
+            document_id: 1042,
+            prompt_used: 'System: Extract invoice data\nUser: Invoice text...',
+            ai_response: '{"title": "Invoice 1042 Clean"}'
+        };
+
+        const getLogDetailsSpy = vi.spyOn(api, 'getLogDetails').mockResolvedValue(detailsResponse);
+
+        const wrapper = mount(ActivityLogs, {
+            props: {
+                ...baseProps,
+                logs: [log],
+                logsTotal: 1
+            }
+        });
+
+        // Find inspect button and click
+        const inspectButton = wrapper.findAll('button').find(b => b.text().includes('Inspect AI Prompt & Response'));
+        expect(inspectButton.exists()).toBe(true);
+        await inspectButton.trigger('click');
+
+        expect(getLogDetailsSpy).toHaveBeenCalledWith(42);
+
+        // Wait for async fetch to update reactive state
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        // Check modal contents
+        expect(wrapper.text()).toContain('AI Interaction — Document #1042');
+        expect(wrapper.text()).toContain('System: Extract invoice data');
+
+        // Switch tab to response
+        const responseTabBtn = wrapper.findAll('button').find(b => b.text().includes('Raw AI Response'));
+        expect(responseTabBtn.exists()).toBe(true);
+        await responseTabBtn.trigger('click');
+        expect(wrapper.text()).toContain('{"title": "Invoice 1042 Clean"}');
+
+        // Close modal
+        const closeBtn = wrapper.findAll('button').find(b => b.text().trim() === 'Close');
+        expect(closeBtn.exists()).toBe(true);
+        await closeBtn.trigger('click');
+        expect(wrapper.text()).not.toContain('AI Interaction — Document #1042');
+    });
 });
+

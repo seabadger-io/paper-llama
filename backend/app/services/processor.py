@@ -127,6 +127,18 @@ class DocumentProcessor:
             extra_params=_parse_extra_params(getattr(settings, "llamacpp_extra_params", None)),
         )
 
+    def _format_ai_interaction_log(self, text: str | None) -> str | None:
+        """Formats the prompt or response for changelog according to configured settings."""
+        if not text:
+            return None
+        log_enabled = getattr(self.settings, "log_ai_interactions", True)
+        if log_enabled is False:
+            return None
+        max_chars = getattr(self.settings, "log_max_ai_chars", 0) or 0
+        if max_chars > 0 and len(text) > max_chars:
+            return text[:max_chars] + f"\n... [truncated to {max_chars} characters]"
+        return text
+
     async def get_cached_metadata(self):
         """Fetches metadata from Paperless or returns cached version if less than 10 minutes old."""
         current_time = time.time()
@@ -547,8 +559,8 @@ class DocumentProcessor:
                     document_id=document_id,
                     original_state=log_original,
                     new_state=log_new,
-                    prompt_used=prompt,
-                    ai_response=ai_response_text,
+                    prompt_used=self._format_ai_interaction_log(prompt),
+                    ai_response=self._format_ai_interaction_log(ai_response_text),
                 )
                 self.db.add(log_entry)
                 await self._mark_processed(document_id, "success")
@@ -593,8 +605,8 @@ class DocumentProcessor:
                         if "log_original" in locals()
                         else {"title": f"Document {document_id}"},
                         new_state=failure_new_state,
-                        prompt_used=prompt if prompt else "",
-                        ai_response=ai_response_text if ai_response_text else "",
+                        prompt_used=self._format_ai_interaction_log(prompt),
+                        ai_response=self._format_ai_interaction_log(ai_response_text),
                     )
                     self.db.add(log_entry)
                     await self.db.commit()

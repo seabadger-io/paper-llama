@@ -5,10 +5,12 @@ import pytest
 from backend.app.api.endpoints.admin import (
     SettingsUpdate,
     get_current_settings,
+    get_log_details,
     get_setup_status,
+    trigger_log_cleanup,
     update_settings,
 )
-from backend.app.db.models import AdminUser, AppSettings
+from backend.app.db.models import AdminUser, AppSettings, DocumentChangeLog
 
 
 class MockDB:
@@ -201,6 +203,68 @@ def test_settings_validation_temperature_negative():
 def test_settings_validation_context_size_invalid():
     with pytest.raises(ValueError, match="Value must be greater than zero"):
         SettingsUpdate(ollama_context_size=0)
+
+
+def test_settings_validation_negative_log_settings():
+    with pytest.raises(ValueError, match="Value cannot be negative"):
+        SettingsUpdate(log_retention_days=-1)
+    with pytest.raises(ValueError, match="Value cannot be negative"):
+        SettingsUpdate(log_compact_after_days=-5)
+    with pytest.raises(ValueError, match="Value cannot be negative"):
+        SettingsUpdate(log_max_ai_chars=-100)
+
+
+@pytest.mark.asyncio
+async def test_get_log_details_success():
+    log = DocumentChangeLog(
+        id=123,
+        document_id=456,
+        prompt_used="Sample prompt text",
+        ai_response='{"title": "Test Title"}',
+    )
+    mock_db = MockDB(log)
+    user = AdminUser(username="admin")
+
+    details = await get_log_details(log_id=123, db=mock_db, current_user=user)
+    assert details["id"] == 123
+    assert details["document_id"] == 456
+    assert details["prompt_used"] == "Sample prompt text"
+    assert details["ai_response"] == '{"title": "Test Title"}'
+    assert details["has_ai_interaction"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_log_details_not_found():
+    from fastapi import HTTPException
+
+    mock_db = MockDB(None)
+    user = AdminUser(username="admin")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await get_log_details(log_id=999, db=mock_db, current_user=user)
+    assert exc_info.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_trigger_log_cleanup():
+    from unittest.mock import patch
+
+    mock_settings = AppSettings(
+        log_retention_days=60,
+        log_compact_after_days=15,
+    )
+    mock_db = MockDB(mock_settings)
+    user = AdminUser(username="admin")
+
+    with patch(
+        "backend.app.api.endpoints.admin.perform_log_maintenance",
+        return_value={"deleted_logs": 5, "compacted_logs": 12},
+    ) as mock_maint:
+        result = await trigger_log_cleanup(db=mock_db, current_user=user)
+        assert result["deleted_logs"] == 5
+        assert result["compacted_logs"] == 12
+        assert result["message"] == "Log maintenance completed successfully"
+        mock_maint.assert_called_once_with(session=mock_db, settings=mock_settings)
 
 
 

@@ -3,6 +3,7 @@ import AIBackendSettings from './AIBackendSettings.js';
 import CapabilitiesSettings from './CapabilitiesSettings.js';
 import MetadataPermissionsSettings from './MetadataPermissionsSettings.js';
 import DocumentQuerySettings from './DocumentQuerySettings.js';
+import LoggingSettings from './LoggingSettings.js';
 
 export default {
     name: 'SettingsView',
@@ -29,7 +30,8 @@ export default {
         'ai-backend-settings': AIBackendSettings,
         'capabilities-settings': CapabilitiesSettings,
         'metadata-permissions-settings': MetadataPermissionsSettings,
-        'document-query-settings': DocumentQuerySettings
+        'document-query-settings': DocumentQuerySettings,
+        'logging-settings': LoggingSettings
     },
     computed: {
         paperlessError() {
@@ -135,6 +137,13 @@ export default {
                     <document-query-settings 
                         v-model="modelValue" 
                         :available-tags="availableTags"
+                    />
+                </div>
+
+                <!-- Logging & Retention Section -->
+                <div class="border-t border-gray-100 pt-6" id="logging-settings">
+                    <logging-settings 
+                        v-model="modelValue" 
                     />
                 </div>
 

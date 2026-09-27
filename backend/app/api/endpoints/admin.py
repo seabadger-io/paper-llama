@@ -11,6 +11,7 @@ from ...api.deps import get_current_user
 from ...core.config import settings as core_settings
 from ...core.scheduler import (
     get_pending_documents_count,
+    perform_log_maintenance,
     trigger_workflow,
     update_scheduler,
 )
@@ -76,6 +77,25 @@ class SettingsUpdate(BaseModel):
     metadata_edit_groups: list[int] = []
     vision_fallback: str = "off"
     vision_pages: int = 3
+    log_ai_interactions: bool = True
+    log_max_ai_chars: int = 0
+    log_retention_days: int = 90
+    log_compact_after_days: int = 30
+
+    @field_validator(
+        "log_max_ai_chars", "log_retention_days", "log_compact_after_days", mode="before"
+    )
+    @classmethod
+    def validate_non_negative_int(cls, v):
+        if v is None or v == "":
+            return 0
+        try:
+            val = int(v)
+        except (ValueError, TypeError):
+            raise ValueError("Value must be an integer")
+        if val < 0:
+            raise ValueError("Value cannot be negative")
+        return val
 
     @field_validator("ollama_temperature", "llamacpp_temperature", mode="before")
     @classmethod
@@ -231,6 +251,18 @@ async def get_current_settings(
         metadata_edit_groups=settings.metadata_edit_groups or [],
         vision_fallback=settings.vision_fallback or "off",
         vision_pages=settings.vision_pages if settings.vision_pages is not None else 3,
+        log_ai_interactions=settings.log_ai_interactions
+        if settings.log_ai_interactions is not None
+        else True,
+        log_max_ai_chars=settings.log_max_ai_chars
+        if settings.log_max_ai_chars is not None
+        else 0,
+        log_retention_days=settings.log_retention_days
+        if settings.log_retention_days is not None
+        else 90,
+        log_compact_after_days=settings.log_compact_after_days
+        if settings.log_compact_after_days is not None
+        else 30,
     )
 
 
@@ -291,6 +323,10 @@ async def update_settings(
     app_settings.metadata_edit_groups = settings_data.metadata_edit_groups
     app_settings.vision_fallback = settings_data.vision_fallback
     app_settings.vision_pages = settings_data.vision_pages
+    app_settings.log_ai_interactions = settings_data.log_ai_interactions
+    app_settings.log_max_ai_chars = settings_data.log_max_ai_chars
+    app_settings.log_retention_days = settings_data.log_retention_days
+    app_settings.log_compact_after_days = settings_data.log_compact_after_days
 
     await db.commit()
 
@@ -357,12 +393,53 @@ async def get_change_logs(
                 "changed_at": log.changed_at,
                 "original_state": log.original_state,
                 "new_state": log.new_state,
+                "has_ai_interaction": bool(log.prompt_used or log.ai_response),
             }
             for log in logs
         ],
         "total": total,
         "limit": limit,
         "offset": offset,
+    }
+
+
+@router.get("/logs/{log_id}/details")
+async def get_log_details(
+    log_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user),
+):
+    """Fetch detailed AI interaction info (prompt and response) for a specific log entry on demand."""
+    query = select(DocumentChangeLog).where(DocumentChangeLog.id == log_id)
+    result = await db.execute(query)
+    log = result.scalar_one_or_none()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log entry not found")
+
+    return {
+        "id": log.id,
+        "document_id": log.document_id,
+        "changed_at": log.changed_at,
+        "prompt_used": log.prompt_used,
+        "ai_response": log.ai_response,
+        "has_ai_interaction": bool(log.prompt_used or log.ai_response),
+    }
+
+
+@router.post("/logs/cleanup")
+async def trigger_log_cleanup(
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user),
+):
+    """Manually trigger log retention pruning and prompt/response compaction."""
+    query = select(AppSettings).limit(1)
+    result = await db.execute(query)
+    settings = result.scalar_one_or_none()
+    stats = await perform_log_maintenance(session=db, settings=settings)
+    return {
+        "message": "Log maintenance completed successfully",
+        "deleted_logs": stats["deleted_logs"],
+        "compacted_logs": stats["compacted_logs"],
     }
 
 

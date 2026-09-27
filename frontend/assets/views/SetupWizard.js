@@ -153,7 +153,11 @@ export default {
                 metadata_edit_users: [],
                 metadata_edit_groups: [],
                 vision_fallback: 'off',
-                vision_pages: 3
+                vision_pages: 3,
+                log_ai_interactions: true,
+                log_max_ai_chars: 0,
+                log_retention_days: 90,
+                log_compact_after_days: 30
             },
             confirm_password: '',
             availableModels: [],

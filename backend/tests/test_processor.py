@@ -534,3 +534,31 @@ async def test_process_document_captures_token_usage(processor, mocker):
     assert changelog_entries[0].new_state["token_usage"] == mock_usage
 
 
+def test_format_ai_interaction_log_modes(mock_settings, mock_db_session):
+    processor = DocumentProcessor(db_session=mock_db_session, settings=mock_settings)
+
+    # 1. None or empty returns None
+    assert processor._format_ai_interaction_log(None) is None
+    assert processor._format_ai_interaction_log("") is None
+
+    # 2. Default: log_ai_interactions=True, max_chars=0 (full text)
+    sample_text = "This is a full prompt or response."
+    assert processor._format_ai_interaction_log(sample_text) == sample_text
+
+    # 3. log_ai_interactions=False returns None
+    mock_settings.log_ai_interactions = False
+    assert processor._format_ai_interaction_log(sample_text) is None
+
+    # 4. Truncation when log_max_ai_chars > 0
+    mock_settings.log_ai_interactions = True
+    mock_settings.log_max_ai_chars = 10
+    truncated = processor._format_ai_interaction_log(sample_text)
+    assert truncated.startswith("This is a ")
+    assert "... [truncated to 10 characters]" in truncated
+
+    # 5. Text shorter than log_max_ai_chars is untouched
+    mock_settings.log_max_ai_chars = 100
+    assert processor._format_ai_interaction_log(sample_text) == sample_text
+
+
+

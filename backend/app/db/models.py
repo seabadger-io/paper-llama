@@ -79,6 +79,12 @@ class AppSettings(Base):
     metadata_edit_users = Column(JSON, default=[])
     metadata_edit_groups = Column(JSON, default=[])
 
+    # Logging and Retention Settings
+    log_ai_interactions = Column(Boolean, default=True)
+    log_max_ai_chars = Column(Integer, default=0)  # 0 means unlimited / full
+    log_retention_days = Column(Integer, default=90)  # 0 means keep indefinitely
+    log_compact_after_days = Column(Integer, default=30)  # 0 means never compact
+
 
 class ProcessedDocument(Base):
     """Tracks documents that have already been processed to avoid infinite loops."""

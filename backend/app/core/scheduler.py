@@ -3,9 +3,10 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sqlalchemy import delete, update
 from sqlalchemy.future import select
 
-from ..db.models import AppSettings, ProcessedDocument
+from ..db.models import AppSettings, DocumentChangeLog, ProcessedDocument
 from ..db.session import AsyncSessionLocal
 from ..services.processor import DocumentProcessor
 
@@ -100,6 +101,73 @@ async def get_pending_documents_count() -> int:
         return len(queue)
 
 
+async def perform_log_maintenance(
+    session=None, settings: AppSettings | None = None
+) -> dict[str, int]:
+    """Prunes logs older than log_retention_days and compacts logs older than log_compact_after_days."""
+    should_close = False
+    session_ctx = None
+    if session is None:
+        session_ctx = AsyncSessionLocal()
+        session = await session_ctx.__aenter__()
+        should_close = True
+    try:
+        if settings is None:
+            query = select(AppSettings).limit(1)
+            result = await session.execute(query)
+            settings = result.scalar_one_or_none()
+
+        if not settings:
+            return {"deleted_logs": 0, "compacted_logs": 0}
+
+        now = datetime.now(UTC)
+        deleted_count = 0
+        compacted_count = 0
+
+        # 1. Prune logs older than log_retention_days (if > 0)
+        retention_days = getattr(settings, "log_retention_days", 90) or 0
+        if retention_days > 0:
+            cutoff = now - timedelta(days=retention_days)
+            del_stmt = delete(DocumentChangeLog).where(DocumentChangeLog.changed_at < cutoff)
+            del_res = await session.execute(del_stmt)
+            deleted_count = (
+                del_res.rowcount
+                if del_res.rowcount is not None and del_res.rowcount >= 0
+                else 0
+            )
+
+        # 2. Compact logs older than log_compact_after_days (if > 0)
+        compact_days = getattr(settings, "log_compact_after_days", 30) or 0
+        if compact_days > 0:
+            cutoff = now - timedelta(days=compact_days)
+            compact_stmt = (
+                update(DocumentChangeLog)
+                .where(
+                    DocumentChangeLog.changed_at < cutoff,
+                    (DocumentChangeLog.prompt_used.is_not(None))
+                    | (DocumentChangeLog.ai_response.is_not(None)),
+                )
+                .values(prompt_used=None, ai_response=None)
+            )
+            compact_res = await session.execute(compact_stmt)
+            compacted_count = (
+                compact_res.rowcount
+                if compact_res.rowcount is not None and compact_res.rowcount >= 0
+                else 0
+            )
+
+        if deleted_count > 0 or compacted_count > 0:
+            await session.commit()
+            logger.info(
+                f"Log maintenance complete: {deleted_count} logs pruned, {compacted_count} logs compacted."
+            )
+
+        return {"deleted_logs": deleted_count, "compacted_logs": compacted_count}
+    finally:
+        if should_close and session_ctx is not None:
+            await session_ctx.__aexit__(None, None, None)
+
+
 async def _run_processing_cycle():
     """The core logic that queries paperless for new documents and processes them."""
     logger.info("Running document check cycle...")
@@ -129,6 +197,12 @@ async def _run_processing_cycle():
 
         processor = DocumentProcessor(db_session=session, settings=settings)
         queue = await _build_document_queue(session, settings, processor)
+
+        # Run log retention pruning and prompt/response compaction
+        try:
+            await perform_log_maintenance(session, settings)
+        except Exception as e:
+            logger.warning(f"Error during log maintenance: {e}")
 
         for doc_id in queue:
             # We do this sequentially to not overload Ollama or Paperless

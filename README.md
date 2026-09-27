@@ -134,6 +134,21 @@ Dashboard.
     **Note:** If the Query Tag is configured, the document will only be re-processed if it has both
     the Query Tag and the Force Process Tag assigned.
 
+- **Logging & Retention:**
+    - **Log AI Prompts & Responses:** Toggle whether full prompts and raw model responses are
+      recorded in the document changelog for troubleshooting and classification verification.
+    - **Max AI Interaction Characters:** Limit the maximum character length stored per prompt and
+      response (set to `0` for unlimited).
+    - **Log Retention Period (Days):** Automatically prune document changelog entries older than
+      this many days (default `90` days; set to `0` to keep indefinitely).
+    - **Log Compaction Period (Days):** Remove stored prompts and responses from entries older than
+      this many days while preserving metadata, tags, timestamps, token metrics, and audit history
+      (default `30` days; set to `0` to never compact).
+    - **Manual Maintenance:** Trigger log pruning and compaction immediately from the settings page.
+    - **View logs:** In the Activity Logs view, you can click "Inspect AI Prompt & Response" on any
+      entry to view full prompts and raw model outputs. Token usage (prompt, completion, reasoning,
+      and total tokens) is also displayed whenever reported by the AI backend.
+
 ## Database Migrations
 
 The application uses Alembic to manage database schema updates.

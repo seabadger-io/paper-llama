@@ -56,6 +56,12 @@ export const api = {
     getLogs(limit = 20, offset = 0) {
         return this.request(`/admin/logs?limit=${limit}&offset=${offset}`, 'GET', null, true);
     },
+    getLogDetails(logId) {
+        return this.request(`/admin/logs/${logId}/details`, 'GET', null, true);
+    },
+    runLogCleanup() {
+        return this.request('/admin/logs/cleanup', 'POST', null, true);
+    },
     getProcessing() {
         return this.request('/admin/processing', 'GET', null, true);
     },
