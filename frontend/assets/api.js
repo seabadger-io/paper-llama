@@ -82,5 +82,45 @@ export const api = {
     },
     updateAdminAccount(data) {
         return this.request('/admin/account', 'PUT', data, true);
+    },
+    createEventSource(onEvent, onError) {
+        const token = localStorage.getItem('token');
+        if (!token || typeof EventSource === 'undefined') return null;
+        const url = `${API_BASE}/admin/events?token=${encodeURIComponent(token)}`;
+        const es = new EventSource(url);
+
+        const eventTypes = [
+            'connected',
+            'document_started',
+            'document_completed',
+            'workflow_started',
+            'workflow_completed'
+        ];
+
+        eventTypes.forEach((type) => {
+            es.addEventListener(type, (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (onEvent) onEvent({ type, ...data });
+                } catch (err) {
+                    console.error(`Failed to parse SSE event (${type}):`, err);
+                }
+            });
+        });
+
+        es.onmessage = (e) => {
+            try {
+                const data = JSON.parse(e.data);
+                if (onEvent) onEvent(data);
+            } catch (err) {
+                console.error('Failed to parse SSE message:', err);
+            }
+        };
+
+        if (onError) {
+            es.onerror = onError;
+        }
+
+        return es;
     }
 };

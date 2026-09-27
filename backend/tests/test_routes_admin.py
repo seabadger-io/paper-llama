@@ -1,10 +1,11 @@
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from backend.app.api.endpoints.admin import (
     SettingsUpdate,
     get_current_settings,
+    get_events,
     get_log_details,
     get_setup_status,
     trigger_log_cleanup,
@@ -265,6 +266,19 @@ async def test_trigger_log_cleanup():
         assert result["compacted_logs"] == 12
         assert result["message"] == "Log maintenance completed successfully"
         mock_maint.assert_called_once_with(session=mock_db, settings=mock_settings)
+
+
+@pytest.mark.asyncio
+async def test_get_events_endpoint():
+    mock_request = MagicMock()
+    mock_request.is_disconnected = AsyncMock(return_value=False)
+    user = AdminUser(username="admin")
+
+    response = await get_events(request=mock_request, token="valid_token", current_user=user)
+    assert response.status_code == 200
+    assert response.media_type == "text/event-stream"
+    assert response.headers["Cache-Control"] == "no-cache"
+
 
 
 

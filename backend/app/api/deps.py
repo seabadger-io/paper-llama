@@ -36,6 +36,25 @@ async def get_current_user(
     return user
 
 
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="api/auth/login", auto_error=False)
+
+
+async def get_current_user_flexible(
+    token: str | None = None,
+    header_token: str | None = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db),
+) -> AdminUser:
+    """Authenticates using either standard Authorization header or ?token= query parameter (for SSE)."""
+    actual_token = header_token or token
+    if not actual_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return await get_current_user(token=actual_token, db=db)
+
+
 async def get_settings(db: AsyncSession = Depends(get_db)) -> AppSettings:
     """Dependency to retrieve the application settings. Raises 404 if not found (Setup Wizard needed)."""
     query = select(AppSettings).limit(1)

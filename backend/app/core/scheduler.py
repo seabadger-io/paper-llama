@@ -8,6 +8,7 @@ from sqlalchemy.future import select
 from ..db.models import AppSettings, DocumentChangeLog, ProcessedDocument
 from ..db.session import AsyncSessionLocal
 from ..services.processor import DocumentProcessor
+from .events import event_broadcaster
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +288,12 @@ async def _run_processing_cycle():
         processor = DocumentProcessor(db_session=session, settings=settings)
         queue = await _build_document_queue(session, settings, processor)
 
+        if queue:
+            event_broadcaster.publish(
+                "workflow_started",
+                {"queue_count": len(queue), "document_ids": queue},
+            )
+
         # Run log retention pruning and prompt/response compaction
         try:
             await perform_log_maintenance(session, settings)
@@ -298,6 +305,12 @@ async def _run_processing_cycle():
             await processor.process_document(doc_id)
             # Small delay to keep the system responsive
             await asyncio.sleep(1)
+
+        if queue:
+            event_broadcaster.publish(
+                "workflow_completed",
+                {"processed_count": len(queue)},
+            )
 
 
 async def trigger_workflow(from_webhook=False):

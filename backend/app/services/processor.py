@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from ..core.events import event_broadcaster
 from ..db.models import AppSettings, DocumentChangeLog, ProcessedDocument
 from .llamacpp import LlamaCppClient
 from .ollama import OllamaClient
@@ -632,5 +633,22 @@ class DocumentProcessor:
                 document_id=document_id, status=status, error_message=error_message
             )
             self.db.add(new_record)
-
         await self.db.commit()
+
+        # Broadcast real-time SSE events for live processing dashboard
+        now_iso = datetime.now(UTC).isoformat()
+        if status == "processing":
+            event_broadcaster.publish(
+                "document_started",
+                {"document_id": document_id, "started_at": now_iso},
+            )
+        elif status in ("success", "error"):
+            event_broadcaster.publish(
+                "document_completed",
+                {
+                    "document_id": document_id,
+                    "status": status,
+                    "error_message": error_message,
+                    "completed_at": now_iso,
+                },
+            )

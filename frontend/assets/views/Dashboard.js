@@ -52,6 +52,7 @@ export default {
                         :logs-offset="logsOffset"
                         :processing-docs="processingDocs"
                         :server-timezone="serverTimezone"
+                        :sse-connected="sseConnected"
                         :modelValue="settings"
                         @update:modelValue="settings = $event"
                         :message="message"
@@ -104,7 +105,9 @@ export default {
             logInterval: null,
             showTriggerModal: false,
             pendingCount: 0,
-            isFetchingStats: false
+            isFetchingStats: false,
+            eventSource: null,
+            sseConnected: false
         };
     },
     async mounted() {
@@ -112,13 +115,18 @@ export default {
         this.logsOffset = (page - 1) * this.logsLimit;
 
         await this.loadData();
+        this.initEventSource();
         this.logInterval = setInterval(() => {
-            if (this.$route.path.includes('/logs') && this.logsOffset === 0) {
+            if (this.$route.path.includes('/logs') && this.logsOffset === 0 && !this.sseConnected) {
                 this.refreshLogs();
             }
         }, 15000);
     },
     unmounted() {
+        if (this.eventSource) {
+            this.eventSource.close();
+            this.eventSource = null;
+        }
         if (this.logInterval) {
             clearInterval(this.logInterval);
         }
@@ -151,7 +159,7 @@ export default {
                 ]);
                 this.logs = logResponse.logs;
                 this.logsTotal = logResponse.total;
-                this.processingDocs = processingData;
+                this.processingDocs = Array.isArray(processingData) ? [...processingData] : [];
                 this.settings = settingData;
                 this.adminAccount = accountData;
                 this.serverTimezone = settingData.server_timezone || 'UTC';
@@ -176,7 +184,9 @@ export default {
                 ]);
                 this.logs = logResponse.logs;
                 this.logsTotal = logResponse.total;
-                this.processingDocs = processingData;
+                if (!this.sseConnected) {
+                    this.processingDocs = Array.isArray(processingData) ? [...processingData] : [];
+                }
             } catch (e) {
                 if (e.message !== 'Unauthorized') {
                     console.error('Background log refresh failed:', e);
@@ -227,8 +237,54 @@ export default {
             }
         },
         logout() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
             localStorage.removeItem('token');
             this.$router.push('/login');
+        },
+        initEventSource() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+            if (!api.createEventSource) return;
+
+            this.eventSource = api.createEventSource(
+                (event) => this.handleSSEEvent(event),
+                () => {
+                    this.sseConnected = false;
+                }
+            );
+        },
+        handleSSEEvent(event) {
+            if (!event) return;
+            if (event.type === 'connected') {
+                this.sseConnected = true;
+            } else if (event.type === 'document_started') {
+                this.sseConnected = true;
+                const existing = this.processingDocs.find((d) => d.document_id === event.document_id);
+                if (!existing) {
+                    this.processingDocs = [
+                        ...this.processingDocs,
+                        { document_id: event.document_id, started_at: event.started_at }
+                    ];
+                }
+            } else if (event.type === 'document_completed') {
+                this.sseConnected = true;
+                this.processingDocs = this.processingDocs.filter(
+                    (d) => d.document_id !== event.document_id
+                );
+                if (this.logsOffset === 0) {
+                    this.refreshLogs();
+                }
+            } else if (event.type === 'workflow_started') {
+                this.sseConnected = true;
+            } else if (event.type === 'workflow_completed') {
+                this.sseConnected = true;
+                this.refreshLogs();
+            }
         }
     }
 };

@@ -1,14 +1,16 @@
 import json
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from ...api.deps import get_current_user
+from ...api.deps import get_current_user, get_current_user_flexible
 from ...core.config import settings as core_settings
+from ...core.events import event_broadcaster
 from ...core.scheduler import (
     get_pending_documents_count,
     perform_log_maintenance,
@@ -361,6 +363,35 @@ async def get_processing(
     result = await db.execute(query)
     docs = result.scalars().all()
     return [{"document_id": d.document_id, "started_at": d.processed_at} for d in docs]
+
+
+@router.get("/events")
+async def get_events(
+    request: Request,
+    token: str | None = None,
+    current_user: AdminUser = Depends(get_current_user_flexible),
+):
+    """Server-Sent Events stream for live document processing updates."""
+    queue = await event_broadcaster.subscribe()
+
+    async def stream_generator():
+        try:
+            async for chunk in event_broadcaster.event_generator(queue):
+                if await request.is_disconnected():
+                    break
+                yield chunk
+        finally:
+            await event_broadcaster.unsubscribe(queue)
+
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/logs")

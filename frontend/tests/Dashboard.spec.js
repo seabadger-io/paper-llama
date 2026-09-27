@@ -20,7 +20,8 @@ vi.mock('../assets/api.js', () => ({
         getPaperlessGroups: vi.fn(),
         triggerProcessing: vi.fn(),
         getTriggerStats: vi.fn(),
-        getAdminAccount: vi.fn()
+        getAdminAccount: vi.fn(),
+        createEventSource: vi.fn()
     }
 }))
 
@@ -300,5 +301,45 @@ describe('Dashboard Component', () => {
         
         expect(api.getLogs).toHaveBeenCalledWith(20, 40)
         expect(wrapper.text()).toContain('Showing 41 to 60 of 100 entries')
+    })
+
+    it('connects to SSE on mount and updates processing docs on live events', async () => {
+        let eventHandler;
+        const mockClose = vi.fn()
+        api.createEventSource.mockImplementation((onEvent) => {
+            eventHandler = onEvent
+            return { close: mockClose }
+        })
+
+        const wrapper = await createWrapper()
+
+        expect(api.createEventSource).toHaveBeenCalled()
+
+        // Simulate document_started event
+        eventHandler({
+            type: 'document_started',
+            document_id: 123,
+            started_at: '2026-09-27T12:00:00Z'
+        })
+        await flushPromises()
+
+        expect(wrapper.vm.processingDocs).toEqual([
+            { document_id: 123, started_at: '2026-09-27T12:00:00Z' }
+        ])
+        expect(wrapper.vm.sseConnected).toBe(true)
+
+        // Simulate document_completed event
+        eventHandler({
+            type: 'document_completed',
+            document_id: 123,
+            status: 'success'
+        })
+        await flushPromises()
+
+        expect(wrapper.vm.processingDocs).toEqual([])
+
+        // Unmount component and verify event source is closed
+        wrapper.unmount()
+        expect(mockClose).toHaveBeenCalled()
     })
 })
