@@ -1,8 +1,12 @@
 import os
 import sqlite3
+import sys
 
-db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "paper_llama.db"))
-print(f"Checking DB at: {db_path}")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from app.db.session import DATABASE_URL
+
+db_path = DATABASE_URL.split(":///", 1)[-1]
+print(f"Checking DB at: {db_path} (from {DATABASE_URL})")
 
 try:
     c = sqlite3.connect(db_path)

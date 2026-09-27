@@ -23,9 +23,9 @@ COPY --from=frontend-builder /build/frontend/assets/style.css ./frontend/assets/
 COPY reset_admin.py .
 
 # Create directory for SQLite database
-# Using /data as the standard volume mount point
-RUN mkdir -p /data
-ENV DATABASE_URL="sqlite+aiosqlite:////data/paper_llama.db"
+# Using /app/data as the standard volume mount point
+RUN mkdir -p /app/data
+ENV DATABASE_URL="sqlite+aiosqlite:////app/data/paper_llama.db"
 
 EXPOSE 8021
 

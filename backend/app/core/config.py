@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # Timezone for display
     TZ: str = "UTC"
 
+    # Database configuration (single source of truth)
+    DATABASE_URL: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     def __init__(self, **kwargs):

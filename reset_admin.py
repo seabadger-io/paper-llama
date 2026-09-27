@@ -4,24 +4,14 @@ import getpass
 import os
 
 from sqlalchemy.future import select
-from backend.app.db.session import AsyncSessionLocal, init_engine
+from backend.app.db.session import AsyncSessionLocal, init_engine, DATABASE_URL
 from backend.app.db.models import AdminUser
 from backend.app.core.security import get_password_hash
 
 async def reset_password():
     print("Paper Llama Admin Password Reset")
     print("-------------------------------------")
-    
-    # Initialize DB engine to ensure tables exist
-    # If running manually via python reset_admin.py, the DB URL logic in database.py
-    # might need forcing to /data/ if we're inside Docker, but database.py handles it
-    # reasonably well based on __file__ if not overridden.
-    
-    # Let's override the DB directory if we are clearly in docker (/data exists)
-    from backend.app.db import session as db_session
-    if os.path.exists("/data"):
-        db_session.DATABASE_URL = "sqlite+aiosqlite:////data/paper_llama.db"
-    
+    print(f"Database: {DATABASE_URL}")
     await init_engine()
 
     username = input("Enter the admin username to reset (or create): ").strip()

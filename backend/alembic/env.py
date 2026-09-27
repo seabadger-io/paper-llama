@@ -20,9 +20,12 @@ import sys
 from os.path import abspath, dirname
 sys.path.insert(0, dirname(abspath(dirname(__file__))))
 
-from app.db.session import Base
+from app.db.session import Base, DATABASE_URL
 from app.db import models # ensure models are registered
 target_metadata = Base.metadata
+
+if DATABASE_URL:
+    config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
