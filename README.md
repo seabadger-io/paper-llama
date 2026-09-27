@@ -48,12 +48,24 @@ Ensure you have Python 3.10+ and Node.js installed.
     uvicorn backend.main:app --host 0.0.0.0 --port 8021 --reload
     ```
 
-Navigate to `http://localhost:8021` to access the Setup Wizard.
+Navigate to `http://localhost:8021` to access the Setup Wizard. The guided wizard walks you through:
+
+1. **Admin Account:** Create your administrator login credentials.
+2. **Paperless Integration:** Connect to your Paperless-ngx instance and verify credentials.
+3. **AI Backend & Models:** Choose your LLM provider (Ollama or Llama.cpp), select models, and test
+   connectivity.
+4. **Capabilities & Permissions:** Configure which metadata fields AI can modify and set
+   ownership/permission defaults.
+5. **Processing & Schedule:** Set document word limits, polling intervals, and query filtering tags.
+6. **Logging & Finish:** Set retention policies, review your configuration summary, and complete
+   setup.
 
 ## Configuration Settings
 
-Once you complete the initial setup wizard, you can tweak the application settings directly from the
-Dashboard.
+Once initial setup is complete, you can tweak the application settings directly from the Dashboard.
+Settings are organized into dedicated categories with direct URL navigation:
+
+### 1. Paperless-ngx
 
 - **Paperless API Credentials:** The connection URL and Token for your Paperless-ngx instance. I
   recommend to create a dedicated user in Paperless with the following permissions:
@@ -69,6 +81,8 @@ Dashboard.
     E.g. the change document access is not enough if the document has an owner set and the Paper
     LLama user is not added as an editor either directly or via a group.
 
+### 2. AI Backend & Models
+
 - **AI Backend:** Currently supported are Ollama and Llama.cpp (or OpenAI-compatible endpoints).
 - **Ollama AI Config:** Enter the base URL to your local Ollama deployment (e.g.
   `http://localhost:11434`), optional API Key (if running behind an authenticating proxy or hosted
@@ -83,15 +97,6 @@ Dashboard.
   timeout in seconds, **Temperature** (default `0.0`), optional **Max Tokens** (`max_tokens`), and
   **Advanced Model Parameters** accepting custom JSON options (e.g.
   `{"top_p": 0.95, "presence_penalty": 0.1}`).
-- **AI Capabilities Checkboxes:** Choose exactly which fields the AI assistant is allowed to modify.
-  Currently available: Title, Correspondent, Document Type, Tags and Creation Date. By default, it
-  will only use the existing values and if it can't find a match it will leave the field unchanged.
-  If "Allow AI generation" is enabled for a field, it will try to generate new value(s) for it if it
-  couldn't find a good match.
-- **Metadata Permissions:** When you enable AI generation for a field e.g. tags, by default the
-  newly created tag will be owned by the user that Paper Llama is configured to use and it may not
-  be visible to other users. Paper LLama can be configured to apply custom permissions when creating
-  new metadata.
 - **AI Vision Fallback:** Choose between "off", "on" and "force".
     - "off": Process the text content of the document, as stored in Paperless.
     - "on": Process the text content of the document if any and if it's not usable Paper Llama
@@ -101,6 +106,21 @@ Dashboard.
       contents).
     - "force": Always convert the document to images and try to use AI Vision to analyze and
       classify the content. This option ignores the OCR'd text content and should be rarely used.
+
+### 3. Capabilities & Permissions
+
+- **AI Capabilities Checkboxes:** Choose exactly which fields the AI assistant is allowed to modify.
+  Currently available: Title, Correspondent, Document Type, Tags and Creation Date. By default, it
+  will only use the existing values and if it can't find a match it will leave the field unchanged.
+  If "Allow AI generation" is enabled for a field, it will try to generate new value(s) for it if it
+  couldn't find a good match.
+- **Metadata Permissions:** When you enable AI generation for a field e.g. tags, by default the
+  newly created tag will be owned by the user that Paper Llama is configured to use and it may not
+  be visible to other users. Paper LLama can be configured to apply custom permissions when creating
+  new metadata.
+
+### 4. Processing & Schedule
+
 - **Max Retries:** The maximum number of retries per processing cycle if the AI query or saving the
   document fails. Applies to each separately. If a document processing fails even after the retries,
   it will be tried again at the end of the next processing cycle, after it finished processing any
@@ -134,20 +154,24 @@ Dashboard.
     **Note:** If the Query Tag is configured, the document will only be re-processed if it has both
     the Query Tag and the Force Process Tag assigned.
 
-- **Logging & Retention:**
-    - **Log AI Prompts & Responses:** Toggle whether full prompts and raw model responses are
-      recorded in the document changelog for troubleshooting and classification verification.
-    - **Max AI Interaction Characters:** Limit the maximum character length stored per prompt and
-      response (set to `0` for unlimited).
-    - **Log Retention Period (Days):** Automatically prune document changelog entries older than
-      this many days (default `90` days; set to `0` to keep indefinitely).
-    - **Log Compaction Period (Days):** Remove stored prompts and responses from entries older than
-      this many days while preserving metadata, tags, timestamps, token metrics, and audit history
-      (default `30` days; set to `0` to never compact).
-    - **Manual Maintenance:** Trigger log pruning and compaction immediately from the settings page.
-    - **View logs:** In the Activity Logs view, you can click "Inspect AI Prompt & Response" on any
-      entry to view full prompts and raw model outputs. Token usage (prompt, completion, reasoning,
-      and total tokens) is also displayed whenever reported by the AI backend.
+### 5. Logging & Retention
+
+- **Log AI Prompts & Responses:** Toggle whether full prompts and raw model responses are recorded
+  in the document changelog for troubleshooting and classification verification.
+- **Max AI Interaction Characters:** Limit the maximum character length stored per prompt and
+  response (set to `0` for unlimited).
+- **Log Retention Period (Days):** Automatically prune document changelog entries older than this
+  many days (default `90` days; set to `0` to keep indefinitely).
+- **Log Compaction Period (Days):** Remove stored prompts and responses from entries older than this
+  many days while preserving metadata, tags, timestamps, token metrics, and audit history (default
+  `30` days; set to `0` to never compact).
+- **Manual Maintenance:** Trigger log pruning and compaction immediately from the settings page.
+- **View logs:** In the Activity Logs view, you can click "Inspect AI Prompt & Response" on any
+  entry to view full prompts and raw model outputs. Token usage (prompt, completion, reasoning, and
+  total tokens) is also displayed whenever reported by the AI backend.
+
+An **All Settings** view is also available from the navigation rail to review and edit all
+configuration options in a single page.
 
 ## Database Migrations
 

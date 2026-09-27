@@ -122,4 +122,69 @@ describe('SetupWizard Component', () => {
         }))
         expect(mockRouter.push).toHaveBeenCalledWith('/login')
     })
+
+    it('renders all stepper progress items', async () => {
+        const wrapper = await createWrapper()
+        expect(wrapper.text()).toContain('Account')
+        expect(wrapper.text()).toContain('Paperless')
+        expect(wrapper.text()).toContain('AI Backend')
+        expect(wrapper.text()).toContain('Capabilities')
+        expect(wrapper.text()).toContain('Processing')
+        expect(wrapper.text()).toContain('Finish')
+    })
+
+    it('switches steps when clicking stepper item and pushes to router', async () => {
+        const wrapper = await createWrapper()
+        expect(wrapper.vm.currentStep).toBe('account')
+
+        await wrapper.vm.setStep('paperless')
+        expect(mockRouter.push).toHaveBeenCalledWith('/setup/paperless')
+        expect(wrapper.vm.internalStep).toBe('paperless')
+    })
+
+    it('activates step from route params URL directly', async () => {
+        const wrapper = mount(SetupWizard, {
+            global: {
+                mocks: {
+                    $router: mockRouter,
+                    $route: { params: { step: 'capabilities' }, path: '/setup/capabilities' }
+                }
+            }
+        })
+        await flushPromises()
+
+        expect(wrapper.vm.currentStep).toBe('capabilities')
+        expect(wrapper.vm.currentStepObj.title).toBe('Capabilities & Permissions')
+        expect(wrapper.vm.isStepActive('capabilities')).toBe(true)
+        expect(wrapper.vm.isStepActive('account')).toBe(false)
+    })
+
+    it('navigates through steps using next and back buttons', async () => {
+        const wrapper = await createWrapper()
+        expect(wrapper.vm.currentStep).toBe('account')
+
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.internalStep).toBe('paperless')
+        expect(mockRouter.push).toHaveBeenCalledWith('/setup/paperless')
+
+        wrapper.vm.goToPrevStep()
+        expect(wrapper.vm.internalStep).toBe('account')
+        expect(mockRouter.push).toHaveBeenCalledWith('/setup/account')
+    })
+
+    it('displays summary and final complete button on the finish step', async () => {
+        const wrapper = mount(SetupWizard, {
+            global: {
+                mocks: {
+                    $router: mockRouter,
+                    $route: { params: { step: 'logging' }, path: '/setup/logging' }
+                }
+            }
+        })
+        await flushPromises()
+
+        expect(wrapper.text()).toContain('Configuration Summary')
+        expect(wrapper.text()).toContain('Complete Setup & Launch 🚀')
+    })
 })
+

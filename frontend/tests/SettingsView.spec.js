@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import SettingsView from '../assets/components/SettingsView.js';
 
@@ -107,4 +107,123 @@ describe('SettingsView Component', () => {
         // Check save area
         expect(wrapper.text()).toContain('Failed to update settings: Validation error');
     });
+
+    it('renders all category navigation items with titles and subtitles', () => {
+        const wrapper = mount(SettingsView, {
+            props: {
+                modelValue: defaultModelValue
+            }
+        });
+
+        const nav = wrapper.find('nav');
+        expect(nav.exists()).toBe(true);
+        expect(nav.text()).toContain('Paperless-ngx');
+        expect(nav.text()).toContain('AI Backend & Models');
+        expect(nav.text()).toContain('Capabilities & Permissions');
+        expect(nav.text()).toContain('Processing & Schedule');
+        expect(nav.text()).toContain('Logging & Retention');
+        expect(nav.text()).toContain('All Settings');
+    });
+
+    it('navigates to subsettings category on click and triggers router push', async () => {
+        const mockPush = vi.fn();
+        const wrapper = mount(SettingsView, {
+            props: {
+                modelValue: defaultModelValue
+            },
+            global: {
+                mocks: {
+                    $router: { push: mockPush },
+                    $route: { params: { category: 'paperless' }, path: '/dashboard/settings/paperless' }
+                }
+            }
+        });
+
+        expect(wrapper.vm.activeCategory).toBe('paperless');
+
+        // Click Logging category button in desktop nav
+        const buttons = wrapper.findAll('nav button');
+        const loggingBtn = buttons.find((b) => b.text().includes('Logging & Retention'));
+        expect(loggingBtn.exists()).toBe(true);
+        await loggingBtn.trigger('click');
+
+        expect(mockPush).toHaveBeenCalledWith('/dashboard/settings/logging');
+        expect(wrapper.vm.internalCategory).toBe('logging');
+    });
+
+    it('activates category from $route.params.category URL', () => {
+        const wrapper = mount(SettingsView, {
+            props: {
+                modelValue: defaultModelValue
+            },
+            global: {
+                mocks: {
+                    $route: { params: { category: 'logging' }, path: '/dashboard/settings/logging' }
+                }
+            }
+        });
+
+        expect(wrapper.vm.activeCategory).toBe('logging');
+        expect(wrapper.vm.currentCategoryObj.title).toBe('Logging & Retention');
+        expect(wrapper.vm.isCategoryActive('logging')).toBe(true);
+        expect(wrapper.vm.isCategoryActive('paperless')).toBe(false);
+    });
+
+    it('shows all sections when all category is selected', () => {
+        const wrapper = mount(SettingsView, {
+            props: {
+                modelValue: defaultModelValue
+            },
+            global: {
+                mocks: {
+                    $route: { params: { category: 'all' }, path: '/dashboard/settings/all' }
+                }
+            }
+        });
+
+        expect(wrapper.vm.activeCategory).toBe('all');
+        expect(wrapper.vm.isCategoryActive('paperless')).toBe(true);
+        expect(wrapper.vm.isCategoryActive('ai')).toBe(true);
+        expect(wrapper.vm.isCategoryActive('capabilities')).toBe(true);
+        expect(wrapper.vm.isCategoryActive('processing')).toBe(true);
+        expect(wrapper.vm.isCategoryActive('logging')).toBe(true);
+    });
+
+    it('displays error badge on category when section-specific error occurs', () => {
+        const wrapper = mount(SettingsView, {
+            props: {
+                modelValue: defaultModelValue,
+                error: 'Failed to fetch models: Connection timed out'
+            }
+        });
+
+        const nav = wrapper.find('nav');
+        // AI nav button should display error indicator
+        const aiBtn = nav.findAll('button').find((b) => b.text().includes('AI Backend'));
+        expect(aiBtn.exists()).toBe(true);
+        expect(aiBtn.text()).toContain('!');
+    });
+
+    it('navigates via Previous and Next buttons in footer', async () => {
+        const mockPush = vi.fn();
+        const wrapper = mount(SettingsView, {
+            props: {
+                modelValue: defaultModelValue
+            },
+            global: {
+                mocks: {
+                    $router: { push: mockPush },
+                    $route: { params: { category: 'paperless' }, path: '/dashboard/settings/paperless' }
+                }
+            }
+        });
+
+        expect(wrapper.vm.nextCategory.id).toBe('ai');
+        const nextBtn = wrapper.findAll('form button').find((b) => b.text().includes('Next: AI Backend'));
+        expect(nextBtn.exists()).toBe(true);
+        await nextBtn.trigger('click');
+
+        expect(mockPush).toHaveBeenCalledWith('/dashboard/settings/ai');
+    });
 });
+

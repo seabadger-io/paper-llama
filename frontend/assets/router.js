@@ -6,24 +6,31 @@ import SettingsView from './components/SettingsView.js';
 import AccountSettings from './components/AccountSettings.js';
 import { api } from './api.js';
 
+const checkSetup = async (to, from, next) => {
+    try {
+        const status = await api.getStatus();
+        if (status.is_setup) {
+            const token = localStorage.getItem('token');
+            if (token) next('/dashboard');
+            else next('/login');
+        } else {
+            next();
+        }
+    } catch {
+        next();
+    }
+};
+
 const routes = [
     {
         path: '/',
         component: SetupWizard,
-        beforeEnter: async (to, from, next) => {
-            try {
-                const status = await api.getStatus();
-                if (status.is_setup) {
-                    const token = localStorage.getItem('token');
-                    if (token) next('/dashboard');
-                    else next('/login');
-                } else {
-                    next();
-                }
-            } catch {
-                next();
-            }
-        }
+        beforeEnter: checkSetup
+    },
+    {
+        path: '/setup/:step?',
+        component: SetupWizard,
+        beforeEnter: checkSetup
     },
     {
         path: '/login',
@@ -45,7 +52,7 @@ const routes = [
         children: [
             { path: '', redirect: '/dashboard/logs' },
             { path: 'logs', component: ActivityLogs, name: 'dashboard-logs' },
-            { path: 'settings', component: SettingsView, name: 'dashboard-settings' },
+            { path: 'settings/:category?', component: SettingsView, name: 'dashboard-settings' },
             { path: 'account', component: AccountSettings, name: 'dashboard-account' }
         ]
     }
