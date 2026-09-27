@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -409,6 +410,58 @@ async def test_perform_log_maintenance(mock_settings):
     assert stats["compacted_logs"] == 8
     assert mock_session.execute.call_count == 2
     mock_session.commit.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_async_workflow_scheduler_lifecycle():
+    from backend.app.core.scheduler import AsyncWorkflowScheduler
+
+    sched = AsyncWorkflowScheduler()
+    assert sched.running is False
+
+    sched.start()
+    assert sched.running is True
+
+    sched.update_interval(5)
+    assert sched._interval_minutes == 5
+    assert sched.get_job("doc_processing_job") is not None
+
+    sched.remove_job("doc_processing_job")
+    assert sched._interval_minutes == 0
+
+    sched.shutdown()
+    assert sched.running is False
+
+
+@pytest.mark.asyncio
+async def test_async_workflow_scheduler_triggers_workflow():
+    from backend.app.core.scheduler import AsyncWorkflowScheduler
+
+    sched = AsyncWorkflowScheduler()
+    sched._interval_minutes = 1
+
+    called = False
+
+    async def fake_wait_for(coro, timeout=None):
+        nonlocal called
+        if asyncio.iscoroutine(coro):
+            coro.close()
+        if not called:
+            called = True
+            raise TimeoutError()
+        await asyncio.sleep(10)
+
+    with (
+        patch("backend.app.core.scheduler.trigger_workflow", new_callable=AsyncMock) as mock_trigger,
+        patch("asyncio.wait_for", side_effect=fake_wait_for),
+    ):
+        sched.start()
+        # Allow loop to iterate once
+        await asyncio.sleep(0.05)
+        sched.shutdown()
+
+        mock_trigger.assert_awaited_once_with(from_webhook=False)
+
 
 
 

@@ -2,7 +2,6 @@ import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import delete, update
 from sqlalchemy.future import select
 
@@ -12,7 +11,97 @@ from ..services.processor import DocumentProcessor
 
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler()
+
+class AsyncWorkflowScheduler:
+    """Native asyncio recurring workflow scheduler replacing legacy APScheduler."""
+
+    def __init__(self):
+        self._interval_minutes: int = 0
+        self._task: asyncio.Task | None = None
+        self._running: bool = False
+        self._wake_event: asyncio.Event | None = None
+
+    @property
+    def running(self) -> bool:
+        return self._running and self._task is not None and not self._task.done()
+
+    def start(self):
+        if self._running and self._task is not None and not self._task.done():
+            return
+        self._running = True
+        self._wake_event = asyncio.Event()
+        try:
+            loop = asyncio.get_running_loop()
+            self._task = loop.create_task(self._run_loop())
+        except RuntimeError:
+            pass
+
+    def shutdown(self, wait: bool = False):
+        self._running = False
+        if self._wake_event:
+            self._wake_event.set()
+        if self._task and not self._task.done():
+            self._task.cancel()
+        self._task = None
+
+    def update_interval(self, interval_minutes: int):
+        self._interval_minutes = interval_minutes
+        if interval_minutes > 0:
+            logger.info(f"Scheduling job to run every {interval_minutes} minutes.")
+        else:
+            logger.info("Automatic scheduling disabled (interval 0).")
+
+        if self._running and (self._task is None or self._task.done()):
+            try:
+                loop = asyncio.get_running_loop()
+                self._wake_event = asyncio.Event()
+                self._task = loop.create_task(self._run_loop())
+            except RuntimeError:
+                pass
+        elif self._wake_event:
+            self._wake_event.set()
+
+    def get_job(self, job_id: str):
+        return self._task if (self.running and self._interval_minutes > 0) else None
+
+    def remove_job(self, job_id: str):
+        self.update_interval(0)
+
+    async def _run_loop(self):
+        while self._running:
+            try:
+                if self._interval_minutes > 0:
+                    if self._wake_event:
+                        self._wake_event.clear()
+                    try:
+                        await asyncio.wait_for(
+                            self._wake_event.wait()
+                            if self._wake_event
+                            else asyncio.sleep(self._interval_minutes * 60),
+                            timeout=self._interval_minutes * 60,
+                        )
+                        # Woken up by update_interval or shutdown
+                        continue
+                    except TimeoutError:
+                        if self._running and self._interval_minutes > 0:
+                            try:
+                                await trigger_workflow(from_webhook=False)
+                            except Exception as e:
+                                logger.error(f"Error in scheduled workflow trigger: {e}")
+                else:
+                    if self._wake_event:
+                        self._wake_event.clear()
+                        await self._wake_event.wait()
+                    else:
+                        await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Unexpected error in scheduler loop: {e}")
+                await asyncio.sleep(5)
+
+
+scheduler = AsyncWorkflowScheduler()
 
 is_processing = False
 processing_queued = False
@@ -261,24 +350,14 @@ async def trigger_workflow(from_webhook=False):
 
 def update_scheduler(interval_minutes: int):
     """Updates the background job interval."""
-    # Remove existing job if it exists
-    if scheduler.get_job("doc_processing_job"):
-        scheduler.remove_job("doc_processing_job")
-
-    if interval_minutes > 0:
-        logger.info(f"Scheduling job to run every {interval_minutes} minutes.")
-        scheduler.add_job(
-            trigger_workflow,
-            "interval",
-            minutes=interval_minutes,
-            id="doc_processing_job",
-            kwargs={"from_webhook": False},
-        )
-    else:
-        logger.info("Automatic scheduling disabled (interval 0).")
+    scheduler.update_interval(interval_minutes)
 
 
 def start_scheduler():
-    """Starts the APScheduler."""
-    if not scheduler.running:
-        scheduler.start()
+    """Starts the background scheduler."""
+    scheduler.start()
+
+
+def stop_scheduler():
+    """Stops the background scheduler."""
+    scheduler.shutdown(wait=False)
