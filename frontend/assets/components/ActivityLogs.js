@@ -102,7 +102,18 @@ export default {
                                         </span>
                                         <span v-else>None</span>
                                     </div>
-                                    <div v-if="log.new_state?.ai_processing_time_ms != null" class="mt-1 text-xs text-indigo-500 font-medium"><strong>AI Time:</strong> {{ (log.new_state.ai_processing_time_ms / 1000).toFixed(1) }}s</div>
+                                    <div v-if="log.new_state?.ai_processing_time_ms != null || log.new_state?.token_usage" class="mt-2 pt-2 border-t border-gray-100 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                                        <div v-if="log.new_state?.ai_processing_time_ms != null" class="text-indigo-600 font-medium">
+                                            <strong>AI Time:</strong> {{ (log.new_state.ai_processing_time_ms / 1000).toFixed(1) }}s
+                                        </div>
+                                        <div v-if="log.new_state?.token_usage" class="text-gray-600">
+                                            <strong>Tokens:</strong>
+                                            <span class="font-medium text-gray-800 ml-0.5">{{ log.new_state.token_usage.total_tokens != null ? log.new_state.token_usage.total_tokens.toLocaleString() : '—' }}</span>
+                                            <span class="text-gray-500 text-[11px] ml-1">
+                                                ({{ log.new_state.token_usage.prompt_tokens != null ? log.new_state.token_usage.prompt_tokens.toLocaleString() : '0' }} prompt, {{ log.new_state.token_usage.completion_tokens != null ? log.new_state.token_usage.completion_tokens.toLocaleString() : '0' }} completion<span v-if="log.new_state.token_usage.reasoning_tokens">, {{ log.new_state.token_usage.reasoning_tokens.toLocaleString() }} reasoning</span>)
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -110,7 +121,12 @@ export default {
                             <div v-if="log.new_state?.error" class="bg-red-50 p-3 rounded mt-2 text-xs sm:text-sm border-l-4 border-red-500">
                                 <div class="font-semibold text-[10px] uppercase text-red-600 mb-2">Processing Failed</div>
                                 <div class="font-mono text-red-700 break-words mb-2">{{ log.new_state.error }}</div>
-                                <div class="text-[10px] text-gray-500">Attempts: {{ log.new_state.attempts }}</div>
+                                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-gray-500">
+                                    <div>Attempts: {{ log.new_state.attempts }}</div>
+                                    <div v-if="log.new_state?.token_usage">
+                                        Tokens: {{ log.new_state.token_usage.total_tokens != null ? log.new_state.token_usage.total_tokens.toLocaleString() : '—' }} ({{ log.new_state.token_usage.prompt_tokens != null ? log.new_state.token_usage.prompt_tokens.toLocaleString() : '0' }} prompt, {{ log.new_state.token_usage.completion_tokens != null ? log.new_state.token_usage.completion_tokens.toLocaleString() : '0' }} completion<span v-if="log.new_state.token_usage.reasoning_tokens">, {{ log.new_state.token_usage.reasoning_tokens.toLocaleString() }} reasoning</span>)
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

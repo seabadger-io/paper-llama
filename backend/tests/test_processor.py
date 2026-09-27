@@ -13,6 +13,7 @@ class MockDB:
         self.rollback_called_count = 0
         # For existing ProcessedDocument lookups
         self.scalar_return = None
+        self.added_items = []
 
     async def execute(self, query):
         res = MagicMock()
@@ -21,6 +22,7 @@ class MockDB:
 
     def add(self, item):
         self.add_called_count += 1
+        self.added_items.append(item)
 
     async def commit(self):
         self.commit_called_count += 1
@@ -487,4 +489,48 @@ async def test_process_document_logs_traceback_and_ai_preview_on_error(
     assert err_call.kwargs.get("exc_info") is True
     assert "Raw AI response snippet" in err_call.args[0]
     assert "Non-JSON response from LLM" in err_call.args[0]
+
+
+@pytest.mark.asyncio
+async def test_process_document_captures_token_usage(processor, mocker):
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = []
+    DocumentProcessor._metadata_cache["correspondents"] = []
+    DocumentProcessor._metadata_cache["document_types"] = []
+
+    processor.paperless.get_document.return_value = {
+        "id": 144,
+        "content": "Doc content",
+        "title": "Old Title",
+        "tags": [],
+    }
+
+    mock_usage = {
+        "prompt_tokens": 150,
+        "completion_tokens": 50,
+        "total_tokens": 200,
+        "reasoning_tokens": 20,
+    }
+    # generate_completion returning (text, token_usage)
+    processor.ollama.generate_completion.return_value = (
+        '{"title": "Updated Title"}',
+        mock_usage,
+    )
+
+    mock_logger_info = mocker.patch("backend.app.services.processor.logger.info")
+
+    await processor.process_document(144)
+
+    # Check logger called with token usage details
+    info_logs = [call.args[0] for call in mock_logger_info.call_args_list if call.args]
+    assert any("AI token usage" in msg and "total=200" in msg and "reasoning=20" in msg for msg in info_logs)
+
+    # Check DocumentChangeLog new_state contains token_usage
+    changelog_entries = [
+        item for item in processor.db.added_items
+        if hasattr(item, "new_state")
+    ]
+    assert len(changelog_entries) >= 1
+    assert changelog_entries[0].new_state["token_usage"] == mock_usage
+
 

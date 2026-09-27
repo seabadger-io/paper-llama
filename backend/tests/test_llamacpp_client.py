@@ -83,6 +83,38 @@ async def test_generate_completion_with_custom_options(mocker):
 
 
 @pytest.mark.asyncio
+async def test_generate_completion_token_usage(mocker, llamacpp_client):
+    mock_response = mocker.Mock()
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "Llama joke"}}],
+        "usage": {
+            "prompt_tokens": 120,
+            "completion_tokens": 45,
+            "total_tokens": 165,
+            "completion_tokens_details": {"reasoning_tokens": 15},
+        },
+    }
+    mock_response.raise_for_status = mocker.Mock()
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.post.return_value = mock_response
+    mocker.patch("httpx.AsyncClient.__aenter__", return_value=mock_client_instance)
+
+    text, usage = await llamacpp_client.generate_completion(
+        model="llama3", prompt="Tell me a joke", return_usage=True
+    )
+    assert text == "Llama joke"
+    assert usage == {
+        "prompt_tokens": 120,
+        "completion_tokens": 45,
+        "total_tokens": 165,
+        "reasoning_tokens": 15,
+    }
+    assert llamacpp_client.last_usage == usage
+
+
+
+@pytest.mark.asyncio
 async def test_get_models(mocker, llamacpp_client):
     mock_response = mocker.Mock()
     mock_response.json.return_value = {"data": [{"id": "llama3"}]}

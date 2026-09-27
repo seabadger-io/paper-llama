@@ -32,6 +32,7 @@ class LlamaCppClient:
         self.temperature = float(temperature) if temperature is not None else 0.0
         self.max_tokens = int(max_tokens) if max_tokens else None
         self.extra_params = extra_params or {}
+        self.last_usage: dict | None = None
 
     def _get_headers(self) -> dict[str, str]:
         if not self.api_key:
@@ -60,9 +61,14 @@ class LlamaCppClient:
                 raise
 
     async def generate_completion(
-        self, model: str, prompt: str, system: str = "", images: list[str] | None = None
-    ) -> str:
-        """Send a prompt to llama.cpp and receive the generated text.
+        self,
+        model: str,
+        prompt: str,
+        system: str = "",
+        images: list[str] | None = None,
+        return_usage: bool = False,
+    ) -> str | tuple[str, dict | None]:
+        """Send a prompt to llama.cpp and receive the generated text (and optionally token usage).
 
         images: optional list of base64-encoded image strings for vision models.
                 They are embedded using the OpenAI vision message format.
@@ -104,11 +110,41 @@ class LlamaCppClient:
                 response = await client.post(f"{self.base_url}/v1/chat/completions", json=payload)
                 response.raise_for_status()
                 data = response.json()
+
+                token_usage = None
+                usage = data.get("usage")
+                if isinstance(usage, dict):
+                    prompt_tokens = usage.get("prompt_tokens")
+                    completion_tokens = usage.get("completion_tokens")
+                    total_tokens = usage.get("total_tokens")
+                    reasoning_tokens = None
+                    if isinstance(usage.get("completion_tokens_details"), dict):
+                        reasoning_tokens = usage["completion_tokens_details"].get("reasoning_tokens")
+                    if reasoning_tokens is None:
+                        reasoning_tokens = usage.get("reasoning_tokens")
+
+                    if prompt_tokens is not None or completion_tokens is not None or total_tokens is not None:
+                        if total_tokens is None:
+                            total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
+                        token_usage = {
+                            "prompt_tokens": prompt_tokens,
+                            "completion_tokens": completion_tokens,
+                            "total_tokens": total_tokens,
+                        }
+                        if reasoning_tokens is not None:
+                            token_usage["reasoning_tokens"] = reasoning_tokens
+
+                self.last_usage = token_usage
+                if token_usage:
+                    logger.debug(f"Llama.cpp token usage: {token_usage}")
+
                 choices = data.get("choices", [])
-                if not choices:
-                    return ""
-                return choices[0].get("message", {}).get("content", "")
+                content = choices[0].get("message", {}).get("content", "") if choices else ""
+                if return_usage:
+                    return content, token_usage
+                return content
             except Exception as e:
                 err_msg = str(e) or type(e).__name__
                 logger.error(f"Failed to generate llama.cpp completion: {err_msg}")
                 raise Exception(err_msg) from e
+

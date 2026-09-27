@@ -80,6 +80,36 @@ async def test_generate_completion_with_custom_options(mocker):
 
 
 @pytest.mark.asyncio
+async def test_generate_completion_token_usage(mocker, ollama_client):
+    mock_response = mocker.Mock()
+    mock_response.json.return_value = {
+        "response": "Here is your joke",
+        "prompt_eval_count": 42,
+        "eval_count": 18,
+        "reasoning_eval_count": 5,
+    }
+    mock_response.raise_for_status = mocker.Mock()
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.post.return_value = mock_response
+    mocker.patch("httpx.AsyncClient.__aenter__", return_value=mock_client_instance)
+
+    # Test return_usage=True
+    text, usage = await ollama_client.generate_completion(
+        model="llama3", prompt="Tell me a joke", return_usage=True
+    )
+    assert text == "Here is your joke"
+    assert usage == {
+        "prompt_tokens": 42,
+        "completion_tokens": 18,
+        "total_tokens": 60,
+        "reasoning_tokens": 5,
+    }
+    assert ollama_client.last_usage == usage
+
+
+
+@pytest.mark.asyncio
 async def test_get_models(mocker, ollama_client):
     mock_response = mocker.Mock()
     mock_response.json.return_value = {"models": [{"name": "llama3"}]}

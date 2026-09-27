@@ -75,6 +75,20 @@ def _pdf_to_images_base64(
     return images
 
 
+def _merge_token_usages(u1: dict | None, u2: dict | None) -> dict | None:
+    if not u1:
+        return u2
+    if not u2:
+        return u1
+    merged = {}
+    for key in ("prompt_tokens", "completion_tokens", "total_tokens", "reasoning_tokens"):
+        v1 = u1.get(key)
+        v2 = u2.get(key)
+        if v1 is not None or v2 is not None:
+            merged[key] = (v1 or 0) + (v2 or 0)
+    return merged or None
+
+
 class DocumentProcessor:
     _metadata_cache = {"tags": [], "correspondents": [], "document_types": [], "timestamp": 0.0}
 
@@ -139,23 +153,35 @@ class DocumentProcessor:
             DocumentProcessor._metadata_cache["document_types"],
         )
 
-    async def _call_ai(self, prompt: str, images: list[str] | None = None) -> str:
-        """Call the configured AI backend and return the raw response text."""
+    async def _call_ai(
+        self, prompt: str, images: list[str] | None = None, return_usage: bool = True
+    ) -> str | tuple[str, dict | None]:
+        """Call the configured AI backend and return the response text (and usage if requested)."""
         system_prompt = "You are a document classification AI. You output valid JSON only."
-        if self.settings.ai_backend == "llamacpp":
-            return await self.llamacpp.generate_completion(
-                model=self.settings.llamacpp_model,
-                prompt=prompt,
-                system=system_prompt,
-                images=images,
-            )
+        client = self.llamacpp if self.settings.ai_backend == "llamacpp" else self.ollama
+        model = (
+            self.settings.llamacpp_model
+            if self.settings.ai_backend == "llamacpp"
+            else self.settings.ollama_model
+        )
+
+        res = await client.generate_completion(
+            model=model,
+            prompt=prompt,
+            system=system_prompt,
+            images=images,
+            return_usage=return_usage,
+        )
+        if return_usage:
+            if isinstance(res, tuple):
+                return res
+            # Handle mock returning only string in tests
+            last_usage = getattr(client, "last_usage", None)
+            return res, last_usage if isinstance(last_usage, dict) else None
         else:
-            return await self.ollama.generate_completion(
-                model=self.settings.ollama_model,
-                prompt=prompt,
-                system=system_prompt,
-                images=images,
-            )
+            if isinstance(res, tuple):
+                return res[0]
+            return res
 
     def _parse_ai_response(self, ai_response_text: str) -> dict:
         """Extract and parse the JSON object from the AI response."""
@@ -198,10 +224,10 @@ class DocumentProcessor:
         correspondents: list[dict],
         document_types: list[dict],
         prompt_tags: list[dict],
-    ) -> tuple[dict, str, str]:
+    ) -> tuple[dict, str, str, dict | None]:
         """Download the document, render pages to images, and call the vision model.
 
-        Returns (ai_data, vision_prompt, ai_response_text).
+        Returns (ai_data, vision_prompt, ai_response_text, token_usage).
         """
         logger.info(f"Running vision fallback pass for document {document_id}")
 
@@ -214,10 +240,12 @@ class DocumentProcessor:
         vision_prompt = build_vision_prompt(
             self.settings, prompt_tags, correspondents, document_types
         )
-        ai_response_text = await self._call_ai(vision_prompt, images=images)
+        ai_response_text, token_usage = await self._call_ai(
+            vision_prompt, images=images, return_usage=True
+        )
         ai_data = self._parse_ai_response(ai_response_text)
 
-        return ai_data, vision_prompt, ai_response_text
+        return ai_data, vision_prompt, ai_response_text, token_usage
 
     async def process_document(self, document_id: int):
         """Main processing flow for a single document."""
@@ -229,6 +257,7 @@ class DocumentProcessor:
         max_retries = self.settings.max_retries if self.settings.max_retries is not None else 3
         ai_response_text = None
         prompt = None
+        token_usage = None
         ai_processing_time_ms = 0
         original_state = {}
         new_state = {}
@@ -262,7 +291,7 @@ class DocumentProcessor:
                     if use_vision_immediately:
                         # Vision-first path: skip text prompt entirely
                         vision_used = True
-                        ai_data, prompt, ai_response_text = await self._run_vision_pass(
+                        ai_data, prompt, ai_response_text, token_usage = await self._run_vision_pass(
                             document_id, doc, tags, correspondents, document_types, prompt_tags
                         )
                     else:
@@ -270,7 +299,9 @@ class DocumentProcessor:
                         prompt = build_prompt(
                             self.settings, doc_content, prompt_tags, correspondents, document_types
                         )
-                        ai_response_text = await self._call_ai(prompt)
+                        ai_response_text, token_usage = await self._call_ai(
+                            prompt, return_usage=True
+                        )
                         ai_data = self._parse_ai_response(ai_response_text)
 
                         # If vision_mode == "on" and AI flagged the text as poor quality, run vision pass
@@ -279,11 +310,33 @@ class DocumentProcessor:
                                 f"AI flagged document {document_id} as needing vision fallback"
                             )
                             vision_used = True
-                            ai_data, prompt, ai_response_text = await self._run_vision_pass(
-                                document_id, doc, tags, correspondents, document_types, prompt_tags
+                            ai_data, prompt, ai_response_text, vision_token_usage = (
+                                await self._run_vision_pass(
+                                    document_id,
+                                    doc,
+                                    tags,
+                                    correspondents,
+                                    document_types,
+                                    prompt_tags,
+                                )
                             )
+                            token_usage = _merge_token_usages(token_usage, vision_token_usage)
 
                     ai_processing_time_ms = int((time.perf_counter() - start_time) * 1000)
+
+                    if isinstance(token_usage, dict):
+                        usage_parts = []
+                        if token_usage.get("total_tokens") is not None:
+                            usage_parts.append(f"total={token_usage['total_tokens']}")
+                        if token_usage.get("prompt_tokens") is not None:
+                            usage_parts.append(f"prompt={token_usage['prompt_tokens']}")
+                        if token_usage.get("completion_tokens") is not None:
+                            usage_parts.append(f"completion={token_usage['completion_tokens']}")
+                        if token_usage.get("reasoning_tokens") is not None:
+                            usage_parts.append(f"reasoning={token_usage['reasoning_tokens']}")
+                        logger.info(
+                            f"Doc {document_id} AI token usage: {', '.join(usage_parts)}"
+                        )
 
                     # 3. Figure out updates
                     original_state = {
@@ -480,6 +533,9 @@ class DocumentProcessor:
                     "ai_processing_time_ms": ai_processing_time_ms,
                 }
 
+                if isinstance(token_usage, dict):
+                    log_new["token_usage"] = token_usage
+
                 if new_state.get("ai_generated"):
                     log_new["ai_generated"] = new_state.get("ai_generated")
 
@@ -527,12 +583,16 @@ class DocumentProcessor:
                     await self._mark_processed(document_id, "error", err_str)
 
                     # Log failure to activity logs
+                    failure_new_state = {"error": err_str, "attempts": max_retries}
+                    if isinstance(token_usage, dict):
+                        failure_new_state["token_usage"] = token_usage
+
                     log_entry = DocumentChangeLog(
                         document_id=document_id,
                         original_state=log_original
                         if "log_original" in locals()
                         else {"title": f"Document {document_id}"},
-                        new_state={"error": err_str, "attempts": max_retries},
+                        new_state=failure_new_state,
                         prompt_used=prompt if prompt else "",
                         ai_response=ai_response_text if ai_response_text else "",
                     )
@@ -540,6 +600,7 @@ class DocumentProcessor:
                     await self.db.commit()
                 else:
                     ai_response_text = None
+                    token_usage = None
                     await asyncio.sleep(2)
 
     async def _mark_processed(self, document_id: int, status: str, error_message: str = None):
