@@ -62,6 +62,7 @@ export default {
                         :available-groups="availableGroups"
                         :paperless-status="paperlessStatus"
                         :error="error"
+                        @update:error="error = $event"
                         :admin-account="adminAccount"
                         @save="saveSettings"
                         @test-paperless="testPaperless(false)"

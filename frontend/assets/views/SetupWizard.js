@@ -25,7 +25,15 @@ export default {
             </div>
             
             <form class="mt-8 space-y-6" @submit.prevent="submitSetup">
-                <div v-if="error" class="bg-red-50 text-red-500 p-3 rounded-md text-sm border border-red-200">{{ error }}</div>
+                <div v-if="error" class="bg-red-50 text-red-700 p-4 rounded-md text-sm border-l-4 border-red-500 flex items-start justify-between shadow-sm">
+                    <div class="flex items-start space-x-2">
+                        <svg class="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <span class="font-medium break-words">{{ error }}</span>
+                    </div>
+                    <button type="button" @click="error = ''" class="text-red-400 hover:text-red-600 focus:outline-none ml-4 font-bold text-base leading-none" title="Dismiss error">&times;</button>
+                </div>
                 
                 <!-- Admin Credentials -->
                 <div class="pb-4">
@@ -52,6 +60,7 @@ export default {
                     <paperless-settings 
                         v-model="settings" 
                         :paperless-status="paperlessStatus" 
+                        :error="paperlessError"
                         :available-tags="availableTags"
                         @test="testPaperless(false)"
                     />
@@ -61,7 +70,8 @@ export default {
                 <div class="border-t border-gray-100 pt-6">
                     <ai-backend-settings 
                         v-model="settings" 
-                        :available-models="availableModels"
+                        :available-models="availableModels" 
+                        :error="aiBackendError"
                         @fetch-models="(b) => fetchModels(b)"
                     />
                 </div>
@@ -158,6 +168,22 @@ export default {
     computed: {
         passwordMismatch() {
             return this.settings.password !== this.confirm_password && this.confirm_password !== '';
+        },
+        paperlessError() {
+            if (!this.error) return '';
+            const lower = this.error.toLowerCase();
+            if (lower.includes('paperless') || lower.includes('tags no longer exist')) {
+                return this.error;
+            }
+            return '';
+        },
+        aiBackendError() {
+            if (!this.error) return '';
+            const lower = this.error.toLowerCase();
+            if (lower.includes('models') || lower.includes('ollama') || lower.includes('llama')) {
+                return this.error;
+            }
+            return '';
         }
     },
     methods: {

@@ -94,4 +94,44 @@ describe('AIBackendSettings Component', () => {
 
         expect(modelValue.ollama_extra_params).toBe(JSON.stringify({ top_p: 0.9, repeat_penalty: 1.1 }, null, 2));
     });
+
+    it('renders inline error when error prop is provided for Ollama', () => {
+        const modelValue = {
+            ai_backend: 'ollama',
+            ollama_url: 'http://localhost:11434',
+            ollama_model: 'llama3'
+        };
+
+        const wrapper = mount(AIBackendSettings, {
+            props: {
+                modelValue,
+                error: 'Failed to fetch models: Connection refused'
+            }
+        });
+
+        expect(wrapper.text()).toContain('Failed to fetch models: Connection refused');
+        const errorEl = wrapper.find('.text-red-600');
+        expect(errorEl.exists()).toBe(true);
+        expect(errorEl.text()).toContain('Failed to fetch models: Connection refused');
+    });
+
+    it('renders inline error when error prop is provided for Llama.cpp', () => {
+        const modelValue = {
+            ai_backend: 'llamacpp',
+            llamacpp_url: 'http://localhost:8080',
+            llamacpp_model: 'llama3'
+        };
+
+        const wrapper = mount(AIBackendSettings, {
+            props: {
+                modelValue,
+                error: 'Failed to fetch models: 500 Internal Server Error'
+            }
+        });
+
+        expect(wrapper.text()).toContain('Failed to fetch models: 500 Internal Server Error');
+        const errorEl = wrapper.find('.text-red-600');
+        expect(errorEl.exists()).toBe(true);
+        expect(errorEl.text()).toContain('Failed to fetch models: 500 Internal Server Error');
+    });
 });

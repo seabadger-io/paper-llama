@@ -69,6 +69,8 @@ describe('SetupWizard Component', () => {
         
         await wrapper.vm.fetchModels('ollama')
         expect(wrapper.vm.error).toContain('Failed to fetch models: Network Error')
+        expect(wrapper.vm.aiBackendError).toContain('Failed to fetch models: Network Error')
+        expect(wrapper.findComponent({ name: 'AIBackendSettings' }).props('error')).toContain('Failed to fetch models: Network Error')
     })
 
     it('switches between Ollama and Llama.cpp backend options', async () => {
