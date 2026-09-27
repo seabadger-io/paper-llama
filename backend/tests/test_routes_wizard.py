@@ -118,3 +118,44 @@ async def test_test_llamacpp_endpoint_with_api_key(mocker):
     assert res == {"status": "ok", "models": ["qwen2.5"]}
     mock_client.assert_called_once_with(base_url="http://llama:8080", api_key="sk-llamacpp-key")
 
+
+@pytest.mark.asyncio
+async def test_run_setup_wizard_with_advanced_ai_params():
+    mock_db = MockDB(None)
+
+    request = wizard.SetupWizardRequest(
+        username="admin",
+        password="password",
+        paperless_url="http://test",
+        paperless_token="token",
+        ai_backend="ollama",
+        ollama_url="http://test:11434",
+        ollama_model="llama3",
+        ollama_temperature=0.6,
+        ollama_context_size=8192,
+        ollama_extra_params='{"top_p": 0.95}',
+        schedule_interval_minutes=10,
+    )
+
+    response = await wizard.run_setup_wizard(request, db=mock_db)
+    assert response["status"] == "ok"
+    settings_obj = [x for x in mock_db.added_items if isinstance(x, AppSettings)][0]
+    assert settings_obj.ollama_temperature == 0.6
+    assert settings_obj.ollama_context_size == 8192
+    assert settings_obj.ollama_extra_params == '{"top_p": 0.95}'
+
+
+def test_wizard_validation_reserved_key():
+    with pytest.raises(ValueError, match="Reserved parameter"):
+        wizard.SetupWizardRequest(
+            username="admin",
+            password="password",
+            paperless_url="http://test",
+            paperless_token="token",
+            ollama_url="http://test:11434",
+            ollama_model="llama3",
+            ollama_extra_params='{"stream": true}',
+            schedule_interval_minutes=10,
+        )
+
+

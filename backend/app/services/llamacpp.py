@@ -5,16 +5,33 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+RESERVED_KEYS = {
+    "model",
+    "messages",
+    "prompt",
+    "system",
+    "stream",
+    "response_format",
+    "images",
+}
+
+
 class LlamaCppClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8080",
         timeout: float = 300.0,
         api_key: str | None = None,
+        temperature: float = 0.0,
+        max_tokens: int | None = None,
+        extra_params: dict | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = float(timeout)  # AI generation can be slow
         self.api_key = api_key
+        self.temperature = float(temperature) if temperature is not None else 0.0
+        self.max_tokens = int(max_tokens) if max_tokens else None
+        self.extra_params = extra_params or {}
 
     def _get_headers(self) -> dict[str, str]:
         if not self.api_key:
@@ -72,9 +89,15 @@ class LlamaCppClient:
             "model": model,
             "messages": messages,
             "stream": False,
-            "temperature": 0.0,
+            "temperature": self.temperature,
             "response_format": {"type": "json_object"},
         }
+        if self.max_tokens:
+            payload["max_tokens"] = self.max_tokens
+
+        if self.extra_params:
+            safe_extra = {k: v for k, v in self.extra_params.items() if k not in RESERVED_KEYS}
+            payload.update(safe_extra)
 
         async with httpx.AsyncClient(timeout=self.timeout, headers=self._get_headers()) as client:
             try:

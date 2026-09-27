@@ -72,12 +72,17 @@ Dashboard.
 - **AI Backend:** Currently supported are Ollama and Llama.cpp (or OpenAI-compatible endpoints).
 - **Ollama AI Config:** Enter the base URL to your local Ollama deployment (e.g.
   `http://localhost:11434`), optional API Key (if running behind an authenticating proxy or hosted
-  service), select the LLM model from the models that are currently available on your instance (I had
-  good results with `gpt-oss:20b` and more recently with `gemma-4-E4B` on modest hardware), and the
-  timeout in seconds.
+  service), select the LLM model from the models that are currently available on your instance (I
+  had good results with `gpt-oss:20b` and more recently with `gemma-4-E4B` on modest hardware), the
+  timeout in seconds, **Temperature** (default `0.0` for deterministic metadata extraction; can be
+  increased to `0.6+` for reasoning models such as DeepSeek-R1), **Context Window Size** in tokens
+  (`num_ctx`, default `4096`), and **Advanced Model Parameters** accepting custom JSON options (e.g.
+  `{"top_p": 0.9, "repeat_penalty": 1.1}`).
 - **Llama.cpp AI Config:** The base URL to your local Llama.cpp deployment or OpenAI-compatible
-  service (e.g. `http://localhost:8080`), optional API Key (Bearer token), the LLM model, and the
-  timeout in seconds.
+  service (e.g. `http://localhost:8080`), optional API Key (Bearer token), the LLM model, the
+  timeout in seconds, **Temperature** (default `0.0`), optional **Max Tokens** (`max_tokens`), and
+  **Advanced Model Parameters** accepting custom JSON options (e.g.
+  `{"top_p": 0.95, "presence_penalty": 0.1}`).
 - **AI Capabilities Checkboxes:** Choose exactly which fields the AI assistant is allowed to modify.
   Currently available: Title, Correspondent, Document Type, Tags and Creation Date. By default, it
   will only use the existing values and if it can't find a match it will leave the field unchanged.

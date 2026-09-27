@@ -130,3 +130,77 @@ async def test_update_settings(mocker):
     assert mock_db.commit_called_count == 1
 
 
+@pytest.mark.asyncio
+async def test_settings_advanced_parameters(mocker):
+    mock_user = AdminUser(username="test")
+    mocker.patch("backend.app.api.endpoints.admin.update_scheduler")
+
+    mock_settings = AppSettings(
+        paperless_url="http://test",
+        paperless_token="token",
+        ollama_url="http://localhost:11434",
+        update_title=True,
+        update_correspondent=True,
+        update_document_type=True,
+        update_tags=True,
+        document_word_limit=1500,
+        schedule_interval_minutes=15,
+        remove_query_tag=True,
+        ollama_temperature=0.7,
+        ollama_context_size=8192,
+        ollama_extra_params='{"top_p": 0.9}',
+        llamacpp_temperature=0.5,
+        llamacpp_max_tokens=2048,
+        llamacpp_extra_params='{"top_k": 50}',
+    )
+    mock_db = MockDB(mock_settings)
+
+    # Test GET
+    result = await get_current_settings(db=mock_db, current_user=mock_user)
+    assert result.ollama_temperature == 0.7
+    assert result.ollama_context_size == 8192
+    assert result.ollama_extra_params == '{"top_p": 0.9}'
+    assert result.llamacpp_temperature == 0.5
+    assert result.llamacpp_max_tokens == 2048
+    assert result.llamacpp_extra_params == '{"top_k": 50}'
+
+    # Test PUT
+    update_data = SettingsUpdate(
+        ollama_temperature=0.2,
+        ollama_context_size=16384,
+        ollama_extra_params='{"top_p": 0.95}',
+        llamacpp_temperature=0.3,
+        llamacpp_max_tokens=4096,
+        llamacpp_extra_params='{"top_k": 40}',
+    )
+    response = await update_settings(update_data, db=mock_db, current_user=mock_user)
+    assert response == {"message": "Settings updated successfully"}
+    assert mock_settings.ollama_temperature == 0.2
+    assert mock_settings.ollama_context_size == 16384
+    assert mock_settings.ollama_extra_params == '{"top_p": 0.95}'
+    assert mock_settings.llamacpp_temperature == 0.3
+    assert mock_settings.llamacpp_max_tokens == 4096
+    assert mock_settings.llamacpp_extra_params == '{"top_k": 40}'
+
+
+def test_settings_validation_invalid_json():
+    with pytest.raises(ValueError, match="Invalid JSON"):
+        SettingsUpdate(ollama_extra_params="not valid json")
+
+
+def test_settings_validation_reserved_key():
+    with pytest.raises(ValueError, match="Reserved parameter"):
+        SettingsUpdate(ollama_extra_params='{"model": "override", "top_p": 0.9}')
+
+
+def test_settings_validation_temperature_negative():
+    with pytest.raises(ValueError, match="Temperature cannot be negative"):
+        SettingsUpdate(ollama_temperature=-0.5)
+
+
+def test_settings_validation_context_size_invalid():
+    with pytest.raises(ValueError, match="Value must be greater than zero"):
+        SettingsUpdate(ollama_context_size=0)
+
+
+

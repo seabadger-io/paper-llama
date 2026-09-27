@@ -1,7 +1,8 @@
+import json
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -20,6 +21,17 @@ from ...db.session import get_db
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+RESERVED_AI_PARAMS = {
+    "model",
+    "prompt",
+    "system",
+    "stream",
+    "format",
+    "images",
+    "messages",
+    "response_format",
+}
+
 
 class SettingsUpdate(BaseModel):
     paperless_url: str | None = None
@@ -29,10 +41,16 @@ class SettingsUpdate(BaseModel):
     ollama_model: str | None = None
     ollama_timeout: int = 300
     ollama_api_key: str | None = None
+    ollama_temperature: float = 0.0
+    ollama_context_size: int | None = 4096
+    ollama_extra_params: str | None = None
     llamacpp_url: str = "http://localhost:8080"
     llamacpp_model: str | None = None
     llamacpp_timeout: int = 300
     llamacpp_api_key: str | None = None
+    llamacpp_temperature: float = 0.0
+    llamacpp_max_tokens: int | None = None
+    llamacpp_extra_params: str | None = None
     max_retries: int = 3
     update_title: bool = True
     update_correspondent: bool = True
@@ -58,6 +76,59 @@ class SettingsUpdate(BaseModel):
     metadata_edit_groups: list[int] = []
     vision_fallback: str = "off"
     vision_pages: int = 3
+
+    @field_validator("ollama_temperature", "llamacpp_temperature", mode="before")
+    @classmethod
+    def validate_temperature(cls, v):
+        if v is None or v == "":
+            return 0.0
+        try:
+            val = float(v)
+        except (ValueError, TypeError):
+            raise ValueError("Temperature must be a valid number")
+        if val < 0.0:
+            raise ValueError("Temperature cannot be negative")
+        return val
+
+    @field_validator("ollama_context_size", "llamacpp_max_tokens", mode="before")
+    @classmethod
+    def validate_positive_int(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            val = int(v)
+        except (ValueError, TypeError):
+            raise ValueError("Value must be an integer")
+        if val <= 0:
+            raise ValueError("Value must be greater than zero")
+        return val
+
+    @field_validator("ollama_extra_params", "llamacpp_extra_params", mode="before")
+    @classmethod
+    def validate_extra_params(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            v_str = v.strip()
+            if not v_str:
+                return None
+            try:
+                parsed = json.loads(v_str)
+            except Exception as e:
+                raise ValueError(f"Invalid JSON in extra parameters: {e}")
+        elif isinstance(v, dict):
+            parsed = v
+        else:
+            raise ValueError("Extra parameters must be a valid JSON string or object")
+
+        if not isinstance(parsed, dict):
+            raise ValueError("Extra parameters must be a JSON object (key-value mapping)")
+
+        reserved_found = [k for k in parsed.keys() if k in RESERVED_AI_PARAMS]
+        if reserved_found:
+            raise ValueError(f"Reserved parameter(s) cannot be overridden: {', '.join(reserved_found)}")
+
+        return json.dumps(parsed)
 
 
 class AdminAccountInfo(BaseModel):
@@ -107,6 +178,13 @@ async def get_current_settings(
         ollama_model=settings.ollama_model,
         ollama_timeout=settings.ollama_timeout if settings.ollama_timeout is not None else 300,
         ollama_api_key=settings.ollama_api_key,
+        ollama_temperature=settings.ollama_temperature
+        if settings.ollama_temperature is not None
+        else 0.0,
+        ollama_context_size=settings.ollama_context_size
+        if settings.ollama_context_size is not None
+        else 4096,
+        ollama_extra_params=settings.ollama_extra_params,
         llamacpp_url=settings.llamacpp_url
         if settings.llamacpp_url is not None
         else "http://localhost:8080",
@@ -115,6 +193,11 @@ async def get_current_settings(
         if settings.llamacpp_timeout is not None
         else 300,
         llamacpp_api_key=settings.llamacpp_api_key,
+        llamacpp_temperature=settings.llamacpp_temperature
+        if settings.llamacpp_temperature is not None
+        else 0.0,
+        llamacpp_max_tokens=settings.llamacpp_max_tokens,
+        llamacpp_extra_params=settings.llamacpp_extra_params,
         max_retries=settings.max_retries if settings.max_retries is not None else 3,
         update_title=settings.update_title,
         update_correspondent=settings.update_correspondent,
@@ -172,12 +255,18 @@ async def update_settings(
     app_settings.ollama_timeout = settings_data.ollama_timeout
     if settings_data.ollama_api_key is not None:
         app_settings.ollama_api_key = settings_data.ollama_api_key
+    app_settings.ollama_temperature = settings_data.ollama_temperature
+    app_settings.ollama_context_size = settings_data.ollama_context_size
+    app_settings.ollama_extra_params = settings_data.ollama_extra_params
 
     app_settings.llamacpp_url = settings_data.llamacpp_url
     app_settings.llamacpp_model = settings_data.llamacpp_model
     app_settings.llamacpp_timeout = settings_data.llamacpp_timeout
     if settings_data.llamacpp_api_key is not None:
         app_settings.llamacpp_api_key = settings_data.llamacpp_api_key
+    app_settings.llamacpp_temperature = settings_data.llamacpp_temperature
+    app_settings.llamacpp_max_tokens = settings_data.llamacpp_max_tokens
+    app_settings.llamacpp_extra_params = settings_data.llamacpp_extra_params
     app_settings.max_retries = settings_data.max_retries
     app_settings.update_title = settings_data.update_title
     app_settings.update_correspondent = settings_data.update_correspondent

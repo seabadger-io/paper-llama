@@ -84,15 +84,33 @@ class DocumentProcessor:
         self.paperless = PaperlessClient(
             base_url=settings.paperless_url, token=settings.paperless_token
         )
+
+        def _parse_extra_params(params: str | dict | None) -> dict:
+            if not params:
+                return {}
+            if isinstance(params, dict):
+                return params
+            try:
+                parsed = json.loads(params)
+                return parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                return {}
+
         self.ollama = OllamaClient(
             base_url=settings.ollama_url or "http://localhost:11434",
             timeout=float(settings.ollama_timeout) if settings.ollama_timeout else 300.0,
             api_key=getattr(settings, "ollama_api_key", None),
+            temperature=getattr(settings, "ollama_temperature", 0.0),
+            context_size=getattr(settings, "ollama_context_size", 4096),
+            extra_params=_parse_extra_params(getattr(settings, "ollama_extra_params", None)),
         )
         self.llamacpp = LlamaCppClient(
             base_url=settings.llamacpp_url or "http://localhost:8080",
             timeout=float(settings.llamacpp_timeout) if settings.llamacpp_timeout else 300.0,
             api_key=getattr(settings, "llamacpp_api_key", None),
+            temperature=getattr(settings, "llamacpp_temperature", 0.0),
+            max_tokens=getattr(settings, "llamacpp_max_tokens", None),
+            extra_params=_parse_extra_params(getattr(settings, "llamacpp_extra_params", None)),
         )
 
     async def get_cached_metadata(self):

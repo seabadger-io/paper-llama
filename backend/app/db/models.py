@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, Integer, String, Text
 
 from .session import Base
 
@@ -34,12 +34,18 @@ class AppSettings(Base):
     ollama_model = Column(String, nullable=True)
     ollama_timeout = Column(Integer, default=300)
     ollama_api_key = Column(String, nullable=True)
+    ollama_temperature = Column(Float, default=0.0)
+    ollama_context_size = Column(Integer, default=4096, nullable=True)
+    ollama_extra_params = Column(Text, nullable=True)
 
     # Llama.cpp Settings
     llamacpp_url = Column(String, default="http://localhost:8080")
     llamacpp_model = Column(String, nullable=True)
     llamacpp_timeout = Column(Integer, default=300)
     llamacpp_api_key = Column(String, nullable=True)
+    llamacpp_temperature = Column(Float, default=0.0)
+    llamacpp_max_tokens = Column(Integer, nullable=True)
+    llamacpp_extra_params = Column(Text, nullable=True)
 
     # Processing Settings
     max_retries = Column(Integer, default=3)

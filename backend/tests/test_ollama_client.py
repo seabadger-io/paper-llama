@@ -37,9 +37,46 @@ async def test_generate_completion(mocker, ollama_client):
             "system": "You are an assistant",
             "stream": False,
             "format": "json",
+            "options": {"temperature": 0.0, "num_ctx": 4096},
         },
     )
     assert response_text == "This is a completion"
+
+
+@pytest.mark.asyncio
+async def test_generate_completion_with_custom_options(mocker):
+    client = OllamaClient(
+        base_url="http://test_ollama:11434",
+        temperature=0.7,
+        context_size=8192,
+        extra_params={"top_p": 0.9, "model": "override_attempt"},
+    )
+    mock_response = mocker.Mock()
+    mock_response.json.return_value = {"response": "Custom completion"}
+    mock_response.raise_for_status = mocker.Mock()
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.post.return_value = mock_response
+    mocker.patch("httpx.AsyncClient.__aenter__", return_value=mock_client_instance)
+
+    await client.generate_completion(model="llama3", prompt="Hello")
+
+    # model in extra_params should be filtered out from options
+    mock_client_instance.post.assert_called_once_with(
+        "http://test_ollama:11434/api/generate",
+        json={
+            "model": "llama3",
+            "prompt": "Hello",
+            "system": "",
+            "stream": False,
+            "format": "json",
+            "options": {
+                "temperature": 0.7,
+                "num_ctx": 8192,
+                "top_p": 0.9,
+            },
+        },
+    )
 
 
 @pytest.mark.asyncio

@@ -47,6 +47,42 @@ async def test_generate_completion(mocker, llamacpp_client):
 
 
 @pytest.mark.asyncio
+async def test_generate_completion_with_custom_options(mocker):
+    client = LlamaCppClient(
+        base_url="http://test_llamacpp:8080",
+        temperature=0.8,
+        max_tokens=2048,
+        extra_params={"top_k": 40, "model": "override_attempt"},
+    )
+    mock_response = mocker.Mock()
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "Custom llama completion"}}]
+    }
+    mock_response.raise_for_status = mocker.Mock()
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.post.return_value = mock_response
+    mocker.patch("httpx.AsyncClient.__aenter__", return_value=mock_client_instance)
+
+    response_text = await client.generate_completion(model="llama3", prompt="Hello")
+
+    # model in extra_params should be filtered out from top-level payload
+    mock_client_instance.post.assert_called_once_with(
+        "http://test_llamacpp:8080/v1/chat/completions",
+        json={
+            "model": "llama3",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "stream": False,
+            "temperature": 0.8,
+            "response_format": {"type": "json_object"},
+            "max_tokens": 2048,
+            "top_k": 40,
+        },
+    )
+    assert response_text == "Custom llama completion"
+
+
+@pytest.mark.asyncio
 async def test_get_models(mocker, llamacpp_client):
     mock_response = mocker.Mock()
     mock_response.json.return_value = {"data": [{"id": "llama3"}]}

@@ -5,16 +5,34 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+RESERVED_KEYS = {
+    "model",
+    "prompt",
+    "system",
+    "stream",
+    "format",
+    "images",
+    "messages",
+    "response_format",
+}
+
+
 class OllamaClient:
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
         timeout: float = 300.0,
         api_key: str | None = None,
+        temperature: float = 0.0,
+        context_size: int | None = 4096,
+        extra_params: dict | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = float(timeout)  # AI generation can be slow
         self.api_key = api_key
+        self.temperature = float(temperature) if temperature is not None else 0.0
+        self.context_size = int(context_size) if context_size else None
+        self.extra_params = extra_params or {}
 
     def _get_headers(self) -> dict[str, str]:
         if not self.api_key:
@@ -43,12 +61,22 @@ class OllamaClient:
 
         images: optional list of base64-encoded image strings for vision models.
         """
+        options: dict = {
+            "temperature": self.temperature,
+        }
+        if self.context_size:
+            options["num_ctx"] = self.context_size
+        if self.extra_params:
+            safe_extra = {k: v for k, v in self.extra_params.items() if k not in RESERVED_KEYS}
+            options.update(safe_extra)
+
         payload = {
             "model": model,
             "prompt": prompt,
             "system": system,
             "stream": False,
             "format": "json",
+            "options": options,
         }
         if images:
             payload["images"] = images
