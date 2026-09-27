@@ -21,7 +21,9 @@ vi.mock('../assets/api.js', () => ({
         triggerProcessing: vi.fn(),
         getTriggerStats: vi.fn(),
         getAdminAccount: vi.fn(),
-        createEventSource: vi.fn()
+        createEventSource: vi.fn(),
+        reprocessDocument: vi.fn(),
+        retryDocument: vi.fn()
     }
 }))
 
@@ -341,5 +343,18 @@ describe('Dashboard Component', () => {
         // Unmount component and verify event source is closed
         wrapper.unmount()
         expect(mockClose).toHaveBeenCalled()
+    })
+
+    it('adds document to processingDocs on handleDocReprocess', async () => {
+        const wrapper = await createWrapper()
+        expect(wrapper.vm.processingDocs).toEqual([])
+
+        wrapper.vm.handleDocReprocess(999)
+        expect(wrapper.vm.processingDocs.length).toBe(1)
+        expect(wrapper.vm.processingDocs[0].document_id).toBe(999)
+
+        // Does not add duplicate
+        wrapper.vm.handleDocReprocess(999)
+        expect(wrapper.vm.processingDocs.length).toBe(1)
     })
 })

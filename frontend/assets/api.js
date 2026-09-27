@@ -74,6 +74,12 @@ export const api = {
     triggerProcessing() {
         return this.request('/admin/trigger', 'POST', null, true);
     },
+    reprocessDocument(documentId) {
+        return this.request(`/admin/documents/${documentId}/reprocess`, 'POST', null, true);
+    },
+    retryDocument(documentId) {
+        return this.reprocessDocument(documentId);
+    },
     getTriggerStats() {
         return this.request('/admin/trigger/stats', 'GET', null, true);
     },

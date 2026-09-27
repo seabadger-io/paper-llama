@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -8,10 +8,11 @@ from backend.app.api.endpoints.admin import (
     get_events,
     get_log_details,
     get_setup_status,
+    reprocess_single_document,
     trigger_log_cleanup,
     update_settings,
 )
-from backend.app.db.models import AdminUser, AppSettings, DocumentChangeLog
+from backend.app.db.models import AdminUser, AppSettings, DocumentChangeLog, ProcessedDocument
 
 
 class MockDB:
@@ -278,6 +279,124 @@ async def test_get_events_endpoint():
     assert response.status_code == 200
     assert response.media_type == "text/event-stream"
     assert response.headers["Cache-Control"] == "no-cache"
+
+
+@pytest.mark.asyncio
+async def test_reprocess_single_document_success():
+    import backend.app.core.scheduler as sched
+
+    sched.active_document_queue.clear()
+    sched.current_document_id = None
+    mock_db = MockDB(None)
+    user = AdminUser(username="admin")
+
+    with patch("backend.app.core.scheduler.trigger_workflow", new_callable=AsyncMock):
+        result = await reprocess_single_document(
+            document_id=101,
+            db=mock_db,
+            current_user=user,
+        )
+        assert result == {
+            "message": "Document 101 added to processing queue",
+            "document_id": 101,
+        }
+        assert 101 in sched.active_document_queue
+
+
+@pytest.mark.asyncio
+async def test_reprocess_single_document_invalid_id():
+    from fastapi import HTTPException
+
+    mock_db = MockDB(None)
+    user = AdminUser(username="admin")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await reprocess_single_document(
+            document_id=0,
+            db=mock_db,
+            current_user=user,
+        )
+    assert exc_info.value.status_code == 400
+
+    with pytest.raises(HTTPException) as exc_info_neg:
+        await reprocess_single_document(
+            document_id=-5,
+            db=mock_db,
+            current_user=user,
+        )
+    assert exc_info_neg.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_reprocess_single_document_conflict_when_currently_processing():
+    from datetime import UTC, datetime
+
+    from fastapi import HTTPException
+
+    proc_doc = ProcessedDocument(
+        document_id=102,
+        status="processing",
+        processed_at=datetime.now(UTC),
+    )
+    mock_db = MockDB(proc_doc)
+    user = AdminUser(username="admin")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await reprocess_single_document(
+            document_id=102,
+            db=mock_db,
+            current_user=user,
+        )
+    assert exc_info.value.status_code == 409
+    assert "already being processed" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_reprocess_single_document_conflict_when_already_in_queue():
+    from fastapi import HTTPException
+
+    import backend.app.core.scheduler as sched
+
+    sched.active_document_queue = [105]
+    mock_db = MockDB(None)
+    user = AdminUser(username="admin")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await reprocess_single_document(
+            document_id=105,
+            db=mock_db,
+            current_user=user,
+        )
+    assert exc_info.value.status_code == 409
+    assert "already in the processing queue" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_reprocess_single_document_allows_stale_processing():
+    from datetime import UTC, datetime, timedelta
+
+    import backend.app.core.scheduler as sched
+
+    sched.active_document_queue.clear()
+    sched.current_document_id = None
+
+    stale_time = datetime.now(UTC) - timedelta(minutes=45)
+    proc_doc = ProcessedDocument(
+        document_id=103,
+        status="processing",
+        processed_at=stale_time,
+    )
+    mock_db = MockDB(proc_doc)
+    user = AdminUser(username="admin")
+
+    with patch("backend.app.core.scheduler.trigger_workflow", new_callable=AsyncMock):
+        result = await reprocess_single_document(
+            document_id=103,
+            db=mock_db,
+            current_user=user,
+        )
+        assert result["document_id"] == 103
+        assert 103 in sched.active_document_queue
 
 
 

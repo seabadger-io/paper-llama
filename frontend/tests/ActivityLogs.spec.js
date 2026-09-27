@@ -186,5 +186,122 @@ describe('ActivityLogs Component', () => {
         await closeBtn.trigger('click');
         expect(wrapper.text()).not.toContain('AI Interaction — Document #1042');
     });
+
+    it('renders Retry button on failed log and handles retry click', async () => {
+        const failedLog = {
+            id: 50,
+            document_id: 500,
+            changed_at: '2026-09-27T10:00:00Z',
+            original_state: { title: 'Failed Invoice' },
+            new_state: { error: 'Ollama timeout', attempts: 3 }
+        };
+
+        const reprocessSpy = vi.spyOn(api, 'reprocessDocument').mockResolvedValue({
+            message: 'Reprocessing triggered for document 500',
+            document_id: 500
+        });
+
+        const wrapper = mount(ActivityLogs, {
+            props: {
+                ...baseProps,
+                logs: [failedLog],
+                logsTotal: 1
+            }
+        });
+
+        const retryBtn = wrapper.findAll('button').find(b => b.text().includes('Retry'));
+        expect(retryBtn.exists()).toBe(true);
+        expect(retryBtn.attributes('disabled')).toBeUndefined();
+
+        await retryBtn.trigger('click');
+        expect(reprocessSpy).toHaveBeenCalledWith(500);
+
+        await wrapper.vm.$nextTick();
+        expect(wrapper.text()).toContain('Reprocessing triggered for document 500');
+        expect(wrapper.emitted('reprocess')).toBeTruthy();
+        expect(wrapper.emitted('reprocess')[0]).toEqual([500]);
+    });
+
+    it('renders Re-process button on successful log and handles click', async () => {
+        const successLog = {
+            id: 51,
+            document_id: 501,
+            changed_at: '2026-09-27T10:00:00Z',
+            original_state: { title: 'Good Doc' },
+            new_state: { title: 'Clean Doc' }
+        };
+
+        const reprocessSpy = vi.spyOn(api, 'reprocessDocument').mockResolvedValue({
+            message: 'Reprocessing triggered for document 501',
+            document_id: 501
+        });
+
+        const wrapper = mount(ActivityLogs, {
+            props: {
+                ...baseProps,
+                logs: [successLog],
+                logsTotal: 1
+            }
+        });
+
+        const reprocessBtn = wrapper.findAll('button').find(b => b.text().includes('Re-process'));
+        expect(reprocessBtn.exists()).toBe(true);
+
+        await reprocessBtn.trigger('click');
+        expect(reprocessSpy).toHaveBeenCalledWith(501);
+
+        await wrapper.vm.$nextTick();
+        expect(wrapper.text()).toContain('Reprocessing triggered for document 501');
+    });
+
+    it('disables button and shows processing state when document is in processingDocs', () => {
+        const failedLog = {
+            id: 52,
+            document_id: 502,
+            changed_at: '2026-09-27T10:00:00Z',
+            original_state: { title: 'Doc 502' },
+            new_state: { error: 'Connection failed', attempts: 3 }
+        };
+
+        const wrapper = mount(ActivityLogs, {
+            props: {
+                ...baseProps,
+                logs: [failedLog],
+                logsTotal: 1,
+                processingDocs: [{ document_id: 502, started_at: '2026-09-27T10:05:00Z' }]
+            }
+        });
+
+        const retryBtn = wrapper.findAll('button').find(b => b.text().includes('Retrying...'));
+        expect(retryBtn.exists()).toBe(true);
+        expect(retryBtn.attributes('disabled')).toBeDefined();
+    });
+
+    it('displays error banner if reprocessing fails', async () => {
+        const failedLog = {
+            id: 53,
+            document_id: 503,
+            changed_at: '2026-09-27T10:00:00Z',
+            original_state: { title: 'Doc 503' },
+            new_state: { error: 'Error', attempts: 3 }
+        };
+
+        vi.spyOn(api, 'reprocessDocument').mockRejectedValue(new Error('Document is already being processed'));
+
+        const wrapper = mount(ActivityLogs, {
+            props: {
+                ...baseProps,
+                logs: [failedLog],
+                logsTotal: 1
+            }
+        });
+
+        const retryBtn = wrapper.findAll('button').find(b => b.text().includes('Retry'));
+        await retryBtn.trigger('click');
+        await wrapper.vm.$nextTick();
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.text()).toContain('Failed to reprocess document #503: Document is already being processed');
+    });
 });
 

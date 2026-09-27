@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -14,6 +15,7 @@ from ...core.events import event_broadcaster
 from ...core.scheduler import (
     get_pending_documents_count,
     perform_log_maintenance,
+    reprocess_document,
     trigger_workflow,
     update_scheduler,
 )
@@ -352,6 +354,45 @@ async def trigger_processing(
     """Manually trigger document processing."""
     background_tasks.add_task(trigger_workflow, from_webhook=True)
     return {"message": "Processing triggered"}
+
+
+@router.post("/documents/{document_id}/reprocess")
+@router.post("/documents/{document_id}/retry")
+async def reprocess_single_document(
+    document_id: int,
+    background_tasks: BackgroundTasks = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: AdminUser = Depends(get_current_user),
+):
+    """Manually re-process / retry a specific document."""
+    if document_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    query = select(ProcessedDocument).where(ProcessedDocument.document_id == document_id)
+    result = await db.execute(query)
+    proc_doc = result.scalar_one_or_none()
+
+    if proc_doc and proc_doc.status == "processing":
+        processed_at = proc_doc.processed_at
+        if processed_at and processed_at.tzinfo is None:
+            processed_at = processed_at.replace(tzinfo=UTC)
+        if not processed_at or (datetime.now(UTC) - processed_at <= timedelta(minutes=30)):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Document {document_id} is already being processed",
+            )
+
+    success = await reprocess_document(document_id)
+    if not success:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Document {document_id} is already in the processing queue or being processed",
+        )
+
+    return {
+        "message": f"Document {document_id} added to processing queue",
+        "document_id": document_id,
+    }
 
 
 @router.get("/processing")

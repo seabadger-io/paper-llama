@@ -69,6 +69,7 @@ export default {
                         @test-paperless="testPaperless(false)"
                         @fetch-models="(b) => fetchModels(b)"
                         @change-page="changePage"
+                        @reprocess="handleDocReprocess"
                         @logout="logout"
                     />
                 </router-view>
@@ -284,6 +285,16 @@ export default {
             } else if (event.type === 'workflow_completed') {
                 this.sseConnected = true;
                 this.refreshLogs();
+            }
+        },
+        handleDocReprocess(docId) {
+            if (!docId) return;
+            const existing = this.processingDocs.find((d) => d.document_id === docId);
+            if (!existing) {
+                this.processingDocs = [
+                    ...this.processingDocs,
+                    { document_id: docId, started_at: new Date().toISOString() }
+                ];
             }
         }
     }

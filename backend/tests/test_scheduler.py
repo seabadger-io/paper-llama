@@ -8,8 +8,23 @@ from backend.app.core.scheduler import (
     _run_processing_cycle,
     get_pending_documents_count,
     perform_log_maintenance,
+    reprocess_document,
 )
 from backend.app.db.models import AppSettings
+
+
+@pytest.fixture(autouse=True)
+def reset_scheduler_state():
+    import backend.app.core.scheduler as sched
+    sched.active_document_queue.clear()
+    sched.current_document_id = None
+    sched.is_processing = False
+    sched.processing_queued = False
+    yield
+    sched.active_document_queue.clear()
+    sched.current_document_id = None
+    sched.is_processing = False
+    sched.processing_queued = False
 
 
 @pytest.fixture
@@ -461,6 +476,143 @@ async def test_async_workflow_scheduler_triggers_workflow():
         sched.shutdown()
 
         mock_trigger.assert_awaited_once_with(from_webhook=False)
+
+
+@pytest.mark.asyncio
+async def test_reprocess_document_enqueues_and_triggers_when_idle():
+    import backend.app.core.scheduler as sched
+
+    sched.is_processing = False
+    sched.active_document_queue.clear()
+
+    with patch("backend.app.core.scheduler.trigger_workflow", new_callable=AsyncMock) as mock_trigger:
+        success = await reprocess_document(document_id=77)
+
+        assert success is True
+        assert 77 in sched.active_document_queue
+        # Allow asyncio.create_task to run
+        await asyncio.sleep(0.01)
+        mock_trigger.assert_called_once_with(from_webhook=False)
+
+
+@pytest.mark.asyncio
+async def test_reprocess_document_enqueues_without_trigger_when_already_processing():
+    import backend.app.core.scheduler as sched
+
+    sched.is_processing = True
+    sched.active_document_queue.clear()
+
+    with patch("backend.app.core.scheduler.trigger_workflow", new_callable=AsyncMock) as mock_trigger:
+        success = await reprocess_document(document_id=88)
+
+        assert success is True
+        assert 88 in sched.active_document_queue
+        await asyncio.sleep(0.01)
+        mock_trigger.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_reprocess_document_prevents_duplicate_in_active_queue():
+    import backend.app.core.scheduler as sched
+
+    sched.is_processing = True
+    sched.active_document_queue.clear()
+
+    first = await reprocess_document(document_id=99)
+    assert first is True
+    assert sched.active_document_queue == [99]
+
+    # Attempt to re-queue the exact same document
+    second = await reprocess_document(document_id=99)
+    assert second is False
+    assert sched.active_document_queue == [99]
+
+
+@pytest.mark.asyncio
+async def test_reprocess_document_prevents_duplicate_when_currently_processing():
+    import backend.app.core.scheduler as sched
+
+    sched.current_document_id = 123
+    sched.active_document_queue.clear()
+
+    success = await reprocess_document(document_id=123)
+    assert success is False
+    assert sched.active_document_queue == []
+
+
+@pytest.mark.asyncio
+@patch("backend.app.core.scheduler.AsyncSessionLocal")
+@patch("backend.app.core.scheduler.DocumentProcessor")
+@patch("backend.app.core.scheduler._build_document_queue")
+async def test_run_processing_cycle_drains_queue_and_deduplicates(
+    mock_build_queue, mock_processor_class, mock_session_local, mock_settings
+):
+    import backend.app.core.scheduler as sched
+
+    mock_session = AsyncMock()
+    mock_session_local.return_value.__aenter__.return_value = mock_session
+
+    mock_res = MagicMock()
+    mock_res.scalar_one_or_none.return_value = mock_settings
+    mock_session.execute.return_value = mock_res
+
+    mock_processor_instance = AsyncMock()
+    mock_processor_class.return_value = mock_processor_instance
+
+    # Document 50 is manually pre-queued
+    sched.active_document_queue = [50]
+    # Discovered documents include 50 (duplicate) and 60 (new)
+    mock_build_queue.return_value = [50, 60]
+
+    await _run_processing_cycle()
+
+    # Both documents should be processed exactly once, in order
+    assert mock_processor_instance.process_document.call_count == 2
+    mock_processor_instance.process_document.assert_any_call(50)
+    mock_processor_instance.process_document.assert_any_call(60)
+
+    # Queue should be fully drained and current_document_id reset to None
+    assert sched.active_document_queue == []
+    assert sched.current_document_id is None
+
+
+@pytest.mark.asyncio
+async def test_queue_clear_and_helpers():
+    from backend.app.core.scheduler import (
+        _is_ai_backend_configured,
+        scheduler,
+    )
+    from backend.app.db.models import AppSettings
+
+    # Test enqueue and clear
+    await scheduler.enqueue_documents([101, 102])
+    assert scheduler.active_document_queue == [101, 102]
+
+    await scheduler.clear_queue()
+    assert scheduler.active_document_queue == []
+
+    # Test pop and finish
+    await scheduler.enqueue_documents([201])
+    doc_id = await scheduler.pop_next_document()
+    assert doc_id == 201
+    assert scheduler.current_document_id == 201
+
+    await scheduler.finish_current_document()
+    assert scheduler.current_document_id is None
+
+    # Test _is_ai_backend_configured
+    settings = AppSettings()
+    settings.ai_backend = "ollama"
+    settings.ollama_url = "http://localhost:11434"
+    settings.ollama_model = "llama3"
+    assert _is_ai_backend_configured(settings) is True
+
+    settings.ollama_model = ""
+    assert _is_ai_backend_configured(settings) is False
+
+    settings.ai_backend = "invalid_backend"
+    assert _is_ai_backend_configured(settings) is False
+
 
 
 

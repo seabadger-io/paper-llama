@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import sys
 from datetime import UTC, datetime, timedelta
+from types import ModuleType
 
 from sqlalchemy import delete, update
 from sqlalchemy.future import select
@@ -21,6 +23,62 @@ class AsyncWorkflowScheduler:
         self._task: asyncio.Task | None = None
         self._running: bool = False
         self._wake_event: asyncio.Event | None = None
+        self.is_processing: bool = False
+        self.processing_queued: bool = False
+        self.processing_lock: asyncio.Lock = asyncio.Lock()
+        self.document_execution_lock: asyncio.Lock = asyncio.Lock()
+        self.active_document_queue: list[int] = []
+        self.current_document_id: int | None = None
+        self.queue_lock: asyncio.Lock = asyncio.Lock()
+
+    async def clear_queue(self) -> None:
+        """Empties the active document queue under queue_lock."""
+        async with self.queue_lock:
+            self.active_document_queue.clear()
+
+    def _enqueue_unlocked(self, doc_id: int) -> bool:
+        """Internal helper to add a document if not currently processing or queued."""
+        if (
+            doc_id == self.current_document_id
+            or doc_id in self.active_document_queue
+        ):
+            return False
+        self.active_document_queue.append(doc_id)
+        return True
+
+    async def enqueue_document(self, doc_id: int) -> bool:
+        """Queues a single document if not currently processing or already queued."""
+        async with self.queue_lock:
+            return self._enqueue_unlocked(doc_id)
+
+    async def enqueue_documents(self, doc_ids: list[int]) -> list[int]:
+        """Appends new documents to the queue avoiding duplicates, returning a snapshot."""
+        async with self.queue_lock:
+            for doc_id in (doc_ids or []):
+                self._enqueue_unlocked(doc_id)
+            return list(self.active_document_queue)
+
+    async def pop_next_document(self) -> int | None:
+        """Pops the next document from queue and marks it as current."""
+        async with self.queue_lock:
+            if not self.active_document_queue:
+                return None
+            doc_id = self.active_document_queue.pop(0)
+            self.current_document_id = doc_id
+            return doc_id
+
+    async def finish_current_document(self) -> None:
+        """Resets current_document_id to None after processing."""
+        async with self.queue_lock:
+            self.current_document_id = None
+
+    async def get_active_and_pending_ids(self) -> set[int]:
+        """Returns all IDs in the active queue plus currently processing document."""
+        async with self.queue_lock:
+            ids = set(self.active_document_queue)
+            if self.current_document_id is not None:
+                ids.add(self.current_document_id)
+            return ids
 
     @property
     def running(self) -> bool:
@@ -104,9 +162,30 @@ class AsyncWorkflowScheduler:
 
 scheduler = AsyncWorkflowScheduler()
 
-is_processing = False
-processing_queued = False
-processing_lock = asyncio.Lock()
+
+async def _get_app_settings(session) -> AppSettings | None:
+    """Helper to fetch singleton AppSettings from DB."""
+    query = select(AppSettings).limit(1)
+    result = await session.execute(query)
+    return result.scalar_one_or_none()
+
+
+def _is_ai_backend_configured(settings: AppSettings) -> bool:
+    """Validates that the selected AI backend has its required configuration."""
+    ai_backend = settings.ai_backend or "ollama"
+    if ai_backend == "llamacpp":
+        if not settings.llamacpp_url or not settings.llamacpp_model:
+            logger.warning("Job skipped: Llama.cpp URL or Model is not configured.")
+            return False
+        return True
+    elif ai_backend == "ollama":
+        if not settings.ollama_url or not settings.ollama_model:
+            logger.warning("Job skipped: Ollama URL or Model is not configured.")
+            return False
+        return True
+    else:
+        logger.warning(f"Job skipped: Invalid AI backend '{ai_backend}'.")
+        return False
 
 
 async def _build_document_queue(
@@ -184,16 +263,15 @@ async def get_pending_documents_count() -> int:
     """Calculates the number of documents currently waiting for processing."""
     async with AsyncSessionLocal() as session:
         # Load settings
-        query = select(AppSettings).limit(1)
-        result = await session.execute(query)
-        settings = result.scalar_one_or_none()
+        settings = await _get_app_settings(session)
 
         if not settings or not settings.paperless_url or not settings.paperless_token:
             return 0
 
         processor = DocumentProcessor(db_session=session, settings=settings)
-        queue = await _build_document_queue(session, settings, processor)
-        return len(queue)
+        discovered = await _build_document_queue(session, settings, processor)
+        active_ids = await scheduler.get_active_and_pending_ids()
+        return len(set(discovered) | active_ids)
 
 
 async def perform_log_maintenance(
@@ -208,9 +286,7 @@ async def perform_log_maintenance(
         should_close = True
     try:
         if settings is None:
-            query = select(AppSettings).limit(1)
-            result = await session.execute(query)
-            settings = result.scalar_one_or_none()
+            settings = await _get_app_settings(session)
 
         if not settings:
             return {"deleted_logs": 0, "compacted_logs": 0}
@@ -269,34 +345,25 @@ async def _run_processing_cycle():
 
     async with AsyncSessionLocal() as session:
         # Load settings
-        query = select(AppSettings).limit(1)
-        result = await session.execute(query)
-        settings = result.scalar_one_or_none()
+        settings = await _get_app_settings(session)
 
         if not settings or not settings.paperless_url or not settings.paperless_token:
             logger.warning("Job skipped: Paperless URL or Token is not configured.")
             return
 
-        ai_backend = settings.ai_backend or "ollama"
-        if ai_backend == "llamacpp":
-            if not settings.llamacpp_url or not settings.llamacpp_model:
-                logger.warning("Job skipped: Llama.cpp URL or Model is not configured.")
-                return
-        elif ai_backend == "ollama":
-            if not settings.ollama_url or not settings.ollama_model:
-                logger.warning("Job skipped: Ollama URL or Model is not configured.")
-                return
-        else:
-            logger.warning(f"Job skipped: Invalid AI backend '{ai_backend}'.")
+        if not _is_ai_backend_configured(settings):
+            await scheduler.clear_queue()
             return
 
         processor = DocumentProcessor(db_session=session, settings=settings)
-        queue = await _build_document_queue(session, settings, processor)
+        discovered_docs = await _build_document_queue(session, settings, processor)
 
-        if queue:
+        queue_snapshot = await scheduler.enqueue_documents(discovered_docs)
+
+        if queue_snapshot:
             event_broadcaster.publish(
                 "workflow_started",
-                {"queue_count": len(queue), "document_ids": queue},
+                {"queue_count": len(queue_snapshot), "document_ids": queue_snapshot},
             )
 
         # Run log retention pruning and prompt/response compaction
@@ -305,33 +372,70 @@ async def _run_processing_cycle():
         except Exception as e:
             logger.warning(f"Error during log maintenance: {e}")
 
-        for doc_id in queue:
-            # We do this sequentially to not overload Ollama or Paperless
-            await processor.process_document(doc_id)
+        processed_count = 0
+        while True:
+            doc_id = await scheduler.pop_next_document()
+            if doc_id is None:
+                break
+
+            try:
+                async with scheduler.document_execution_lock:
+                    await processor.process_document(doc_id)
+                processed_count += 1
+            finally:
+                await scheduler.finish_current_document()
+
             # Small delay to keep the system responsive
             await asyncio.sleep(1)
 
-        if queue:
+        if processed_count > 0:
             event_broadcaster.publish(
                 "workflow_completed",
-                {"processed_count": len(queue)},
+                {"processed_count": processed_count},
             )
+
+
+async def reprocess_document(document_id: int) -> bool:
+    """Queues a document for reprocessing.
+
+    If a processing cycle is currently in progress, the document is added to
+    the active document queue (if not already present). Otherwise, a new
+    processing workflow is initiated.
+
+    Returns True if successfully queued or started, False if the document is
+    already in the active queue or currently being processed.
+    """
+    if not await scheduler.enqueue_document(document_id):
+        logger.info(
+            f"Document {document_id} is already in the active queue or currently processing."
+        )
+        return False
+
+    logger.info(
+        f"Document {document_id} added to active processing queue. (Queue size: {len(scheduler.active_document_queue)})"
+    )
+
+    # If workflow is not currently active, start it
+    async with scheduler.processing_lock:
+        if not scheduler.is_processing:
+            logger.info(f"Starting processing cycle for manual document {document_id}.")
+            asyncio.create_task(trigger_workflow(from_webhook=False))
+
+    return True
 
 
 async def trigger_workflow(from_webhook=False):
     """Entry point to trigger the workflow, handling overlaps and queues."""
-    global is_processing, processing_queued
-
-    async with processing_lock:
-        if is_processing:
+    async with scheduler.processing_lock:
+        if scheduler.is_processing:
             if from_webhook:
                 logger.info("Processing already in progress, queuing processing request.")
-                processing_queued = True
+                scheduler.processing_queued = True
             else:
                 logger.info("Processing already in progress, timed scheduler skipped.")
             return
 
-        is_processing = True
+        scheduler.is_processing = True
 
     try:
         max_retries = 3
@@ -352,18 +456,20 @@ async def trigger_workflow(from_webhook=False):
                 await asyncio.sleep(10)
                 continue
 
-            async with processing_lock:
-                if processing_queued:
+            async with scheduler.processing_lock:
+                if scheduler.processing_queued:
                     logger.info("Processing was queued. Starting another cycle.")
-                    processing_queued = False
+                    scheduler.processing_queued = False
+                elif scheduler.active_document_queue:
+                    logger.info("Active document queue has remaining items. Starting another cycle.")
                 else:
                     break
     except Exception as e:
         logger.error(f"Critical error in workflow trigger: {e}")
     finally:
-        async with processing_lock:
-            is_processing = False
-            processing_queued = False
+        async with scheduler.processing_lock:
+            scheduler.is_processing = False
+            scheduler.processing_queued = False
 
 
 def update_scheduler(interval_minutes: int):
@@ -379,3 +485,52 @@ def start_scheduler():
 def stop_scheduler():
     """Stops the background scheduler."""
     scheduler.shutdown(wait=False)
+
+
+class _SchedulerModule(ModuleType):
+    @property
+    def is_processing(self) -> bool:
+        return scheduler.is_processing
+
+    @is_processing.setter
+    def is_processing(self, value: bool):
+        scheduler.is_processing = value
+
+    @property
+    def processing_queued(self) -> bool:
+        return scheduler.processing_queued
+
+    @processing_queued.setter
+    def processing_queued(self, value: bool):
+        scheduler.processing_queued = value
+
+    @property
+    def active_document_queue(self) -> list[int]:
+        return scheduler.active_document_queue
+
+    @active_document_queue.setter
+    def active_document_queue(self, value: list[int]):
+        scheduler.active_document_queue = value
+
+    @property
+    def current_document_id(self) -> int | None:
+        return scheduler.current_document_id
+
+    @current_document_id.setter
+    def current_document_id(self, value: int | None):
+        scheduler.current_document_id = value
+
+    @property
+    def queue_lock(self) -> asyncio.Lock:
+        return scheduler.queue_lock
+
+    @property
+    def processing_lock(self) -> asyncio.Lock:
+        return scheduler.processing_lock
+
+    @property
+    def document_execution_lock(self) -> asyncio.Lock:
+        return scheduler.document_execution_lock
+
+
+sys.modules[__name__].__class__ = _SchedulerModule

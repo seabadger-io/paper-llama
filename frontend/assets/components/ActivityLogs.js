@@ -20,7 +20,10 @@ export default {
             detailsError: '',
             copiedPrompt: false,
             copiedResponse: false,
-            activeTab: 'prompt'
+            activeTab: 'prompt',
+            actionMessage: '',
+            actionError: '',
+            retryingDocIds: []
         };
     },
     computed: {
@@ -77,10 +80,61 @@ export default {
             } catch {
                 // Ignore clipboard write failures in unsupported contexts
             }
+        },
+        isDocProcessing(docId) {
+            if (!docId) return false;
+            const inProcessingDocs =
+                Array.isArray(this.processingDocs) &&
+                this.processingDocs.some((d) => d.document_id === docId);
+            const inLocalRetrying =
+                Array.isArray(this.retryingDocIds) && this.retryingDocIds.includes(docId);
+            return inProcessingDocs || inLocalRetrying;
+        },
+        async reprocess(docId) {
+            if (!docId || this.isDocProcessing(docId)) return;
+            this.actionMessage = '';
+            this.actionError = '';
+            this.retryingDocIds.push(docId);
+            try {
+                const res = await api.reprocessDocument(docId);
+                this.actionMessage = res.message || `Reprocessing triggered for document #${docId}`;
+                this.$emit('reprocess', docId);
+                setTimeout(() => {
+                    if (this.actionMessage.includes(String(docId))) {
+                        this.actionMessage = '';
+                    }
+                }, 5000);
+            } catch (e) {
+                this.actionError = `Failed to reprocess document #${docId}: ${e.message}`;
+            } finally {
+                setTimeout(() => {
+                    this.retryingDocIds = this.retryingDocIds.filter((id) => id !== docId);
+                }, 3000);
+            }
         }
     },
     template: `
         <div class="bg-white shadow overflow-hidden sm:rounded-md p-6">
+            <!-- Action Alerts (Success / Error) -->
+            <div v-if="actionMessage" class="mb-4 bg-green-50 border-l-4 border-green-500 p-3 rounded text-xs sm:text-sm text-green-800 flex justify-between items-center transition shadow-sm">
+                <div class="flex items-center">
+                    <svg class="h-4 w-4 mr-2 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>{{ actionMessage }}</span>
+                </div>
+                <button type="button" @click="actionMessage = ''" class="text-green-600 hover:text-green-800 text-sm font-bold ml-4">&times;</button>
+            </div>
+            <div v-if="actionError" class="mb-4 bg-red-50 border-l-4 border-red-500 p-3 rounded text-xs sm:text-sm text-red-800 flex justify-between items-center transition shadow-sm">
+                <div class="flex items-center">
+                    <svg class="h-4 w-4 mr-2 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{{ actionError }}</span>
+                </div>
+                <button type="button" @click="actionError = ''" class="text-red-600 hover:text-red-800 text-sm font-bold ml-4">&times;</button>
+            </div>
+
             <!-- Currently Processing Section -->
             <div v-if="processingDocs.length > 0" class="mb-6">
                 <h2 class="text-lg leading-6 font-medium text-blue-800 mb-2 flex items-center">
@@ -188,7 +242,23 @@ export default {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="mt-2 pt-2 border-t border-gray-200 flex items-center justify-end">
+                                <div class="mt-2 pt-2 border-t border-gray-200 flex items-center justify-end space-x-3">
+                                    <button 
+                                        type="button" 
+                                        @click="reprocess(log.document_id)"
+                                        :disabled="isDocProcessing(log.document_id)"
+                                        class="inline-flex items-center text-xs font-medium text-gray-600 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                        title="Re-run AI processing on this document"
+                                    >
+                                        <svg v-if="isDocProcessing(log.document_id)" class="animate-spin -ml-0.5 mr-1 h-3.5 w-3.5 text-blue-600" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <svg v-else class="h-3.5 w-3.5 mr-1 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                        {{ isDocProcessing(log.document_id) ? 'Processing...' : 'Re-process' }}
+                                    </button>
                                     <button 
                                         type="button" 
                                         @click="openAiDetails(log)"
@@ -213,16 +283,34 @@ export default {
                                             Tokens: {{ log.new_state.token_usage.total_tokens != null ? log.new_state.token_usage.total_tokens.toLocaleString() : '—' }} ({{ log.new_state.token_usage.prompt_tokens != null ? log.new_state.token_usage.prompt_tokens.toLocaleString() : '0' }} prompt, {{ log.new_state.token_usage.completion_tokens != null ? log.new_state.token_usage.completion_tokens.toLocaleString() : '0' }} completion<span v-if="log.new_state.token_usage.reasoning_tokens">, {{ log.new_state.token_usage.reasoning_tokens.toLocaleString() }} reasoning</span>)
                                         </div>
                                     </div>
-                                    <button 
-                                        type="button" 
-                                        @click="openAiDetails(log)"
-                                        class="inline-flex items-center text-xs font-medium text-red-700 hover:text-red-900 transition"
-                                    >
-                                        <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                        </svg>
-                                        Inspect AI Prompt & Response
-                                    </button>
+                                    <div class="flex items-center space-x-3">
+                                        <button 
+                                            type="button" 
+                                            @click="reprocess(log.document_id)"
+                                            :disabled="isDocProcessing(log.document_id)"
+                                            class="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded shadow-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                            title="Retry processing this failed document"
+                                        >
+                                            <svg v-if="isDocProcessing(log.document_id)" class="animate-spin -ml-0.5 mr-1.5 h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            <svg v-else class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                            {{ isDocProcessing(log.document_id) ? 'Retrying...' : 'Retry' }}
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            @click="openAiDetails(log)"
+                                            class="inline-flex items-center text-xs font-medium text-red-700 hover:text-red-900 transition"
+                                        >
+                                            <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            Inspect AI Prompt & Response
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
