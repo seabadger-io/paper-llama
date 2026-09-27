@@ -30,8 +30,8 @@ def fuzzy_match(name: str, available_items: list[dict]) -> dict | None:
     if not normalized_name:
         return None
 
-    for item in available_items:
-        if normalize(item.get("name")) == normalized_name:
+    for item in (available_items or []):
+        if isinstance(item, dict) and normalize(item.get("name")) == normalized_name:
             return item
     return None
 
@@ -288,8 +288,9 @@ class DocumentProcessor:
 
                     prompt_tags = [
                         t
-                        for t in tags
-                        if t["id"]
+                        for t in (tags or [])
+                        if isinstance(t, dict)
+                        and t.get("id")
                         not in (self.settings.query_tag_id, self.settings.force_process_tag_id)
                     ]
 
@@ -354,7 +355,7 @@ class DocumentProcessor:
                     # 3. Figure out updates
                     original_state = {
                         "title": doc.get("title"),
-                        "tags": doc.get("tags", []),
+                        "tags": doc.get("tags") or [],
                         "correspondent": doc.get("correspondent"),
                         "document_type": doc.get("document_type"),
                         "created": doc.get("created"),
@@ -475,8 +476,8 @@ class DocumentProcessor:
                     if self.settings.force_process_tag_id:
                         remove_tag_ids.append(self.settings.force_process_tag_id)
 
-                    existing_tags = original_state["tags"]
-                    merged_tags = list(set(existing_tags) | set(new_tag_ids))
+                    existing_tags = original_state.get("tags") or []
+                    merged_tags = list(set(existing_tags) | set(new_tag_ids or []))
 
                     if remove_tag_ids:
                         final_tags = [tid for tid in merged_tags if tid not in remove_tag_ids]
@@ -515,8 +516,8 @@ class DocumentProcessor:
                 def _resolve_id(items, item_id):
                     if item_id is None:
                         return None
-                    for i in items:
-                        if i.get("id") == item_id:
+                    for i in (items or []):
+                        if isinstance(i, dict) and i.get("id") == item_id:
                             return f"{i.get('id')} ({i.get('name')})"
                     return str(item_id)
 

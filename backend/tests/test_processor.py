@@ -455,6 +455,59 @@ async def test_process_document_handles_null_recommendations(processor):
 
 
 @pytest.mark.asyncio
+async def test_process_document_handles_null_ai_recommended_with_generation_flags(
+    processor, mock_settings
+):
+    mock_settings.generate_correspondent = True
+    mock_settings.generate_document_type = True
+    mock_settings.generate_tags = True
+    mock_settings.update_title = True
+    mock_settings.update_correspondent = True
+    mock_settings.update_document_type = True
+    mock_settings.update_tags = True
+    mock_settings.update_creation_date = True
+
+    DocumentProcessor._metadata_cache["timestamp"] = 9999999999
+    DocumentProcessor._metadata_cache["tags"] = [
+        {"id": 30, "name": "Contract"},
+        {"id": 9, "name": "Rent"},
+    ]
+    DocumentProcessor._metadata_cache["correspondents"] = [{"id": 3, "name": "Landlord"}]
+    DocumentProcessor._metadata_cache["document_types"] = [{"id": 3, "name": "Agreement"}]
+
+    processor.paperless.get_document.return_value = {
+        "id": 200,
+        "content": "Mietvertrags-Nachtrag und Mietzinsänderung",
+        "title": "Old Contract",
+        "tags": [30],
+        "correspondent": None,
+        "document_type": None,
+        "created": "2026-01-01",
+    }
+    # Exact JSON reported by user with ai_recommended: null
+    processor.ollama.generate_completion.return_value = """{
+        "title": "Mietvertrags-Nachtrag und Mietzinsänderung",
+        "correspondent_id": 3,
+        "document_type_id": 3,
+        "tag_ids": [30, 9],
+        "created": "2026-08-25",
+        "needs_vision_fallback": false,
+        "ai_recommended": null
+    }"""
+
+    await processor.process_document(200)
+
+    processor.paperless.update_document.assert_called_once()
+    kwargs = processor.paperless.update_document.call_args.kwargs
+    assert kwargs["title"] == "Mietvertrags-Nachtrag und Mietzinsänderung"
+    assert kwargs["correspondent_id"] == 3
+    assert kwargs["document_type_id"] == 3
+    assert set(kwargs["tags"]) == {30, 9}
+    assert kwargs["created"] == "2026-08-25"
+
+
+
+@pytest.mark.asyncio
 async def test_process_document_logs_traceback_and_ai_preview_on_error(
     processor, mock_settings, mocker
 ):

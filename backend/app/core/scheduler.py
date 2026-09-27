@@ -129,7 +129,10 @@ async def _build_document_queue(
     system_tags, _, _ = await processor.get_cached_metadata()
 
     if settings.query_tag_id:
-        if not any(t.get("id") == settings.query_tag_id for t in system_tags):
+        if not any(
+            isinstance(t, dict) and t.get("id") == settings.query_tag_id
+            for t in (system_tags or [])
+        ):
             logger.error(
                 f"Configured query tag ID '{settings.query_tag_id}' not found in Paperless. Stopping processing."
             )
@@ -144,9 +147,11 @@ async def _build_document_queue(
     new_docs = []
     error_docs = []
 
-    for doc in documents:
+    for doc in (documents or []):
+        if not isinstance(doc, dict):
+            continue
         doc_id = doc.get("id")
-        doc_tags = doc.get("tags", [])
+        doc_tags = doc.get("tags") or []
         status_info = processed_data.get(doc_id)
         status, processed_at = status_info if status_info else (None, None)
 
