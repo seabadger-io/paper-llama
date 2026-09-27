@@ -18,6 +18,72 @@ processing_queued = False
 processing_lock = asyncio.Lock()
 
 
+async def _build_document_queue(
+    session, settings: AppSettings, processor: DocumentProcessor
+) -> list[int]:
+    """Inspects Paperless and ProcessedDocument database records to determine
+
+    which documents need processing (new, forced, error retries, or stale processing).
+    """
+    # We need processing state from DB to avoid re-processing and handle retries
+    proc_query = select(
+        ProcessedDocument.document_id, ProcessedDocument.status, ProcessedDocument.processed_at
+    )
+    proc_result = await session.execute(proc_query)
+    processed_data = {
+        row.document_id: (row.status, row.processed_at) for row in proc_result.all()
+    }
+
+    # First fetch tags to map the force_process_tag to its ID
+    system_tags, _, _ = await processor.get_cached_metadata()
+
+    if settings.query_tag_id:
+        if not any(t.get("id") == settings.query_tag_id for t in system_tags):
+            logger.error(
+                f"Configured query tag ID '{settings.query_tag_id}' not found in Paperless. Stopping processing."
+            )
+            return []
+
+    force_tag_id = settings.force_process_tag_id
+
+    # Query documents from paperless
+    tags_filter = [settings.query_tag_id] if settings.query_tag_id else None
+    documents = await processor.paperless.get_documents(tags=tags_filter)
+
+    new_docs = []
+    error_docs = []
+
+    for doc in documents:
+        doc_id = doc.get("id")
+        doc_tags = doc.get("tags", [])
+        status_info = processed_data.get(doc_id)
+        status, processed_at = status_info if status_info else (None, None)
+
+        if status == "success":
+            if force_tag_id and force_tag_id in doc_tags:
+                logger.info(
+                    f"Document {doc_id} already processed, but force tag found. Reprocessing."
+                )
+                new_docs.append(doc_id)
+            else:
+                continue  # Skip successfully processed
+        elif status == "error":
+            error_docs.append(doc_id)
+        elif status == "processing":
+            # Check for staleness (e.g., 30 minutes)
+            if processed_at and datetime.now(UTC) - processed_at > timedelta(minutes=30):
+                logger.warning(
+                    f"Document {doc_id} has been in processing for too long. Adding to retry queue."
+                )
+                error_docs.append(doc_id)
+            else:
+                continue  # Still actively processing (probably)
+        else:
+            new_docs.append(doc_id)
+
+    return new_docs + error_docs
+
+
 async def get_pending_documents_count() -> int:
     """Calculates the number of documents currently waiting for processing."""
     async with AsyncSessionLocal() as session:
@@ -29,44 +95,9 @@ async def get_pending_documents_count() -> int:
         if not settings or not settings.paperless_url or not settings.paperless_token:
             return 0
 
-        # We need processing state from DB to avoid re-processing and handle retries
-        proc_query = select(
-            ProcessedDocument.document_id, ProcessedDocument.status, ProcessedDocument.processed_at
-        )
-        proc_result = await session.execute(proc_query)
-        processed_data = {
-            row.document_id: (row.status, row.processed_at) for row in proc_result.all()
-        }
-
         processor = DocumentProcessor(db_session=session, settings=settings)
-
-        # First fetch tags to map the force_process_tag to its ID
-        system_tags, _, _ = await processor.get_cached_metadata()
-        force_tag_id = settings.force_process_tag_id
-
-        # Query documents from paperless
-        tags_filter = [settings.query_tag_id] if settings.query_tag_id else None
-        documents = await processor.paperless.get_documents(tags=tags_filter)
-
-        count = 0
-        for doc in documents:
-            doc_id = doc.get("id")
-            doc_tags = doc.get("tags", [])
-            status_info = processed_data.get(doc_id)
-            status, processed_at = status_info if status_info else (None, None)
-
-            if status == "success":
-                if force_tag_id and force_tag_id in doc_tags:
-                    count += 1
-            elif status == "error":
-                count += 1
-            elif status == "processing":
-                # Check for staleness (e.g., 30 minutes)
-                if processed_at and datetime.now(UTC) - processed_at > timedelta(minutes=30):
-                    count += 1
-            else:
-                count += 1
-        return count
+        queue = await _build_document_queue(session, settings, processor)
+        return len(queue)
 
 
 async def _run_processing_cycle():
@@ -96,65 +127,8 @@ async def _run_processing_cycle():
             logger.warning(f"Job skipped: Invalid AI backend '{ai_backend}'.")
             return
 
-        # We need processing state from DB to avoid re-processing and handle retries
-        proc_query = select(
-            ProcessedDocument.document_id, ProcessedDocument.status, ProcessedDocument.processed_at
-        )
-        proc_result = await session.execute(proc_query)
-        processed_data = {
-            row.document_id: (row.status, row.processed_at) for row in proc_result.all()
-        }
-
         processor = DocumentProcessor(db_session=session, settings=settings)
-
-        # First fetch tags to map the force_process_tag to its ID
-        system_tags, _, _ = await processor.get_cached_metadata()
-
-        if settings.query_tag_id:
-            if not any(t.get("id") == settings.query_tag_id for t in system_tags):
-                logger.error(
-                    f"Configured query tag ID '{settings.query_tag_id}' not found in Paperless. Stopping processing."
-                )
-                return
-
-        force_tag_id = settings.force_process_tag_id
-
-        # Query documents from paperless
-        tags_filter = [settings.query_tag_id] if settings.query_tag_id else None
-        documents = await processor.paperless.get_documents(tags=tags_filter)
-
-        new_docs = []
-        error_docs = []
-
-        for doc in documents:
-            doc_id = doc.get("id")
-            doc_tags = doc.get("tags", [])
-            status_info = processed_data.get(doc_id)
-            status, processed_at = status_info if status_info else (None, None)
-
-            if status == "success":
-                if force_tag_id and force_tag_id in doc_tags:
-                    logger.info(
-                        f"Document {doc_id} already processed, but force tag found. Reprocessing."
-                    )
-                    new_docs.append(doc_id)
-                else:
-                    continue  # Skip successfully processed
-            elif status == "error":
-                error_docs.append(doc_id)
-            elif status == "processing":
-                # Check for staleness (e.g., 30 minutes)
-                if processed_at and datetime.now(UTC) - processed_at > timedelta(minutes=30):
-                    logger.warning(
-                        f"Document {doc_id} has been in processing for too long. Adding to retry queue."
-                    )
-                    error_docs.append(doc_id)
-                else:
-                    continue  # Still actively processing (probably)
-            else:
-                new_docs.append(doc_id)
-
-        queue = new_docs + error_docs
+        queue = await _build_document_queue(session, settings, processor)
 
         for doc_id in queue:
             # We do this sequentially to not overload Ollama or Paperless

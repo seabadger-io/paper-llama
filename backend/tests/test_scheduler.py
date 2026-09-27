@@ -2,7 +2,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.app.core.scheduler import _run_processing_cycle
+from backend.app.core.scheduler import (
+    _build_document_queue,
+    _run_processing_cycle,
+    get_pending_documents_count,
+)
 from backend.app.db.models import AppSettings
 
 
@@ -283,5 +287,103 @@ async def test_run_processing_cycle_invalid_ai_backend(
     await _run_processing_cycle()
 
     mock_processor_instance.get_cached_metadata.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("backend.app.core.scheduler.AsyncSessionLocal")
+async def test_get_pending_documents_count_unconfigured(mock_async_session_local):
+    mock_session = AsyncMock()
+    mock_async_session_local.return_value.__aenter__.return_value = mock_session
+
+    mock_result_settings = MagicMock()
+    mock_result_settings.scalar_one_or_none.return_value = None
+    mock_session.execute.return_value = mock_result_settings
+
+    count = await get_pending_documents_count()
+    assert count == 0
+
+
+@pytest.mark.asyncio
+@patch("backend.app.core.scheduler.AsyncSessionLocal")
+@patch("backend.app.core.scheduler._build_document_queue")
+@patch("backend.app.core.scheduler.DocumentProcessor")
+async def test_get_pending_documents_count_delegates_to_build_queue(
+    mock_document_processor_class, mock_build_queue, mock_async_session_local, mock_settings
+):
+    mock_session = AsyncMock()
+    mock_async_session_local.return_value.__aenter__.return_value = mock_session
+
+    mock_result_settings = MagicMock()
+    mock_result_settings.scalar_one_or_none.return_value = mock_settings
+    mock_session.execute.return_value = mock_result_settings
+
+    mock_build_queue.return_value = [101, 102, 103]
+
+    count = await get_pending_documents_count()
+    assert count == 3
+    mock_build_queue.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_build_document_queue_classification(mock_settings):
+    from datetime import UTC, datetime, timedelta
+
+    mock_session = AsyncMock()
+    mock_processor = AsyncMock()
+
+    mock_processor.get_cached_metadata.return_value = (
+        [{"id": 999, "name": "query"}],
+        [],
+        [],
+    )
+    mock_settings.force_process_tag_id = 777
+
+    # DB state:
+    # 1: success (no force tag) -> skip
+    # 2: success (with force tag 777) -> reprocess
+    # 3: error -> retry
+    # 4: processing (fresh, 5m ago) -> skip
+    # 5: processing (stale, 45m ago) -> retry
+    # 6: not in DB -> new doc
+    stale_time = datetime.now(UTC) - timedelta(minutes=45)
+    fresh_time = datetime.now(UTC) - timedelta(minutes=5)
+
+    def make_row(doc_id, status, dt):
+        r = MagicMock()
+        r.document_id = doc_id
+        r.status = status
+        r.processed_at = dt
+        return r
+
+    mock_proc_rows = [
+        make_row(1, "success", fresh_time),
+        make_row(2, "success", fresh_time),
+        make_row(3, "error", fresh_time),
+        make_row(4, "processing", fresh_time),
+        make_row(5, "processing", stale_time),
+    ]
+
+    mock_proc_result = MagicMock()
+    mock_proc_result.all.return_value = mock_proc_rows
+    mock_session.execute.return_value = mock_proc_result
+
+    # Paperless returns docs
+    mock_processor.paperless.get_documents.return_value = [
+        {"id": 1, "tags": [999]},
+        {"id": 2, "tags": [999, 777]},
+        {"id": 3, "tags": [999]},
+        {"id": 4, "tags": [999]},
+        {"id": 5, "tags": [999]},
+        {"id": 6, "tags": [999]},
+    ]
+
+    queue = await _build_document_queue(mock_session, mock_settings, mock_processor)
+
+    # Expected:
+    # new_docs: [2 (force tag), 6 (new)]
+    # error_docs: [3 (error), 5 (stale processing)]
+    # queue = new_docs + error_docs = [2, 6, 3, 5]
+    assert queue == [2, 6, 3, 5]
+
 
 
