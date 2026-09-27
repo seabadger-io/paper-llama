@@ -12,7 +12,12 @@ from sqlalchemy import update
 from sqlalchemy.future import select
 
 from .api.router import api_router
-from .core.scheduler import scheduler
+from .core.scheduler import (
+    scheduler,
+    start_scheduler,
+    trigger_workflow,
+    update_scheduler,
+)
 from .db.models import AppSettings, ProcessedDocument
 from .db.session import AsyncSessionLocal, init_engine
 
@@ -28,7 +33,7 @@ async def lifespan(app: FastAPI):
     await init_engine()
 
     logger.info("Starting scheduler...")
-    scheduler.start_scheduler()
+    start_scheduler()
 
     # Initialize scheduler interval from DB if set
     async with AsyncSessionLocal() as session:
@@ -44,16 +49,17 @@ async def lifespan(app: FastAPI):
         result = await session.execute(query)
         settings = result.scalar_one_or_none()
         if settings and settings.schedule_interval_minutes > 0:
-            scheduler.update_scheduler(settings.schedule_interval_minutes)
+            update_scheduler(settings.schedule_interval_minutes)
         if settings:
             # If the wizard has been run already, trigger a processing cycle on startup
             logger.info("Triggering initial processing cycle in background...")
-            asyncio.create_task(scheduler.trigger_workflow())
+            asyncio.create_task(trigger_workflow())
 
     yield
     # Shutdown
     logger.info("Shutting down...")
-    scheduler.shutdown(wait=False)
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title="Paper Llama API", lifespan=lifespan)
