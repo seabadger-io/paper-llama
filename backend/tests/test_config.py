@@ -41,3 +41,20 @@ def test_session_database_url_resolution(monkeypatch, tmp_path):
     assert reloaded_session.DATABASE_URL == test_url
     assert (tmp_path / "subdir").exists()
 
+
+def test_login_rate_limit_settings_default_and_env(monkeypatch):
+    # Default settings
+    cfg = Settings()
+    assert cfg.LOGIN_RATE_LIMIT_PER_MINUTE == 5
+
+    # Overridden via environment variables
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_PER_MINUTE", "10")
+    env_cfg = Settings()
+    assert env_cfg.LOGIN_RATE_LIMIT_PER_MINUTE == 10
+
+    # Disabled via 0 or negative
+    monkeypatch.setenv("LOGIN_RATE_LIMIT_PER_MINUTE", "0")
+    disabled_cfg = Settings()
+    assert disabled_cfg.LOGIN_RATE_LIMIT_PER_MINUTE == 0
+
+

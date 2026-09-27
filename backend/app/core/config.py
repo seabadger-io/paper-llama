@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Database configuration (single source of truth)
     DATABASE_URL: str = ""
 
+    # Login Rate Limiting (per minute per IP; set <= 0 to disable)
+    LOGIN_RATE_LIMIT_PER_MINUTE: int = 5
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     def __init__(self, **kwargs):

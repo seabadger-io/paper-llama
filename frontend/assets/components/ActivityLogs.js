@@ -156,9 +156,8 @@ export default {
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center space-x-3">
                     <h2 class="text-lg leading-6 font-medium text-gray-900">Recent Processing Activity</h2>
-                    <span v-if="sseConnected" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" title="Connected to real-time event stream">
-                        <span class="w-1.5 h-1.5 mr-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                        Live Updates
+                    <span v-if="sseConnected" class="inline-flex items-center justify-center p-1 rounded-full bg-green-100" title="Live Updates: Connected to real-time event stream">
+                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                     </span>
                 </div>
                 <button type="button" @click="$router ? $router.push('/dashboard/settings/logging') : null" class="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none">

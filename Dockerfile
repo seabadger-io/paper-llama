@@ -26,6 +26,7 @@ COPY reset_admin.py .
 # Using /app/data as the standard volume mount point
 RUN mkdir -p /app/data
 ENV DATABASE_URL="sqlite+aiosqlite:////app/data/paper_llama.db"
+ENV LOGIN_RATE_LIMIT_PER_MINUTE=5
 
 EXPOSE 8021
 

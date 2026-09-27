@@ -7,6 +7,8 @@ services:
       - "8021:8021"
     volumes:
       - data:/app/data
+    # environment:
+    #   - LOGIN_RATE_LIMIT_PER_MINUTE=5  # Set login rate limit per minute per IP (<= 0 to disable)
     # If Ollama and Paperless-ngx are on the same docker network, you can link them here
     # networks:
     #   - your_paperless_network
