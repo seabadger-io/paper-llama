@@ -80,6 +80,16 @@ class AsyncWorkflowScheduler:
                 ids.add(self.current_document_id)
             return ids
 
+    async def get_queue_size(self) -> int:
+        """Returns the number of documents currently queued under queue_lock."""
+        async with self.queue_lock:
+            return len(self.active_document_queue)
+
+    async def has_queued_documents(self) -> bool:
+        """Returns True if there are documents remaining in active_document_queue under queue_lock."""
+        async with self.queue_lock:
+            return bool(self.active_document_queue)
+
     @property
     def running(self) -> bool:
         return self._running and self._task is not None and not self._task.done()
@@ -423,8 +433,9 @@ async def reprocess_document(document_id: int) -> bool:
         )
         return False
 
+    queue_size = await scheduler.get_queue_size()
     logger.info(
-        f"Document {document_id} added to active processing queue. (Queue size: {len(scheduler.active_document_queue)})"
+        f"Document {document_id} added to active processing queue. (Queue size: {queue_size})"
     )
 
     # If workflow is not currently active, start it
@@ -468,11 +479,12 @@ async def trigger_workflow(from_webhook=False):
                 await asyncio.sleep(10)
                 continue
 
+            has_remaining = await scheduler.has_queued_documents()
             async with scheduler.processing_lock:
                 if scheduler.processing_queued:
                     logger.info("Processing was queued. Starting another cycle.")
                     scheduler.processing_queued = False
-                elif scheduler.active_document_queue:
+                elif has_remaining:
                     logger.info("Active document queue has remaining items. Starting another cycle.")
                 else:
                     break

@@ -606,10 +606,16 @@ async def test_queue_clear_and_helpers():
     from backend.app.db.models import AppSettings
 
     # Test enqueue and clear
+    assert await scheduler.get_queue_size() == 0
+    assert await scheduler.has_queued_documents() is False
     await scheduler.enqueue_documents([101, 102])
+    assert await scheduler.get_queue_size() == 2
+    assert await scheduler.has_queued_documents() is True
     assert scheduler.active_document_queue == [101, 102]
 
     await scheduler.clear_queue()
+    assert await scheduler.get_queue_size() == 0
+    assert await scheduler.has_queued_documents() is False
     assert scheduler.active_document_queue == []
 
     # Test pop and finish
