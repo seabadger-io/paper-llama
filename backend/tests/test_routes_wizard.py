@@ -201,4 +201,32 @@ async def test_run_setup_wizard_accepts_custom_webhook_tokens():
     assert settings_obj.webhook_tokens == "my_custom_token_1, my_custom_token_2"
 
 
+@pytest.mark.asyncio
+async def test_run_setup_wizard_logging_settings():
+    mock_db = MockDB(None)
+
+    request = wizard.SetupWizardRequest(
+        username="admin",
+        password="password",
+        paperless_url="http://test",
+        paperless_token="token",
+        ollama_url="http://test:11434",
+        ollama_model="llama3",
+        schedule_interval_minutes=10,
+        log_ai_interactions=False,
+        log_max_ai_chars=500,
+        log_retention_days=14,
+        log_compact_after_days=7,
+    )
+
+    response = await wizard.run_setup_wizard(request, db=mock_db)
+    assert response["status"] == "ok"
+    settings_obj = [x for x in mock_db.added_items if isinstance(x, AppSettings)][0]
+    assert settings_obj.log_ai_interactions is False
+    assert settings_obj.log_max_ai_chars == 500
+    assert settings_obj.log_retention_days == 14
+    assert settings_obj.log_compact_after_days == 7
+
+
+
 

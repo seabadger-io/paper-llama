@@ -90,6 +90,25 @@ class SetupWizardRequest(BaseModel):
     metadata_edit_groups: list[int] = []
     vision_fallback: str = "off"
     vision_pages: int = 3
+    log_ai_interactions: bool = True
+    log_max_ai_chars: int = 0
+    log_retention_days: int = 0
+    log_compact_after_days: int = 30
+
+    @field_validator(
+        "log_max_ai_chars", "log_retention_days", "log_compact_after_days", mode="before"
+    )
+    @classmethod
+    def validate_non_negative_int(cls, v):
+        if v is None or v == "":
+            return 0
+        try:
+            val = int(v)
+        except (ValueError, TypeError):
+            raise ValueError("Value must be an integer")
+        if val < 0:
+            raise ValueError("Value cannot be negative")
+        return val
 
     @field_validator("ollama_temperature", "llamacpp_temperature", mode="before")
     @classmethod
@@ -207,6 +226,10 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         metadata_edit_groups=request.metadata_edit_groups,
         vision_fallback=request.vision_fallback,
         vision_pages=request.vision_pages,
+        log_ai_interactions=request.log_ai_interactions,
+        log_max_ai_chars=request.log_max_ai_chars,
+        log_retention_days=request.log_retention_days,
+        log_compact_after_days=request.log_compact_after_days,
     )
     db.add(new_settings)
 
