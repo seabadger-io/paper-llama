@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import update
-from sqlalchemy.future import select
 
 from .api.router import api_router
 from .core.scheduler import (
@@ -18,7 +17,8 @@ from .core.scheduler import (
     trigger_workflow,
     update_scheduler,
 )
-from .db.models import AppSettings, ProcessedDocument
+from .db.models import ProcessedDocument
+from .db.repository import get_app_settings
 from .db.session import AsyncSessionLocal, init_engine
 
 # Setup logging
@@ -45,9 +45,7 @@ async def lifespan(app: FastAPI):
         )
         await session.commit()
 
-        query = select(AppSettings).limit(1)
-        result = await session.execute(query)
-        settings = result.scalar_one_or_none()
+        settings = await get_app_settings(session)
         if settings and settings.schedule_interval_minutes > 0:
             update_scheduler(settings.schedule_interval_minutes)
         if settings:

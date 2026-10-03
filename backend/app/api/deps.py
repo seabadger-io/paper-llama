@@ -6,6 +6,7 @@ from sqlalchemy.future import select
 
 from ..core.config import settings
 from ..db.models import AdminUser, AppSettings
+from ..db.repository import get_app_settings
 from ..db.session import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
@@ -57,11 +58,8 @@ async def get_current_user_flexible(
 
 async def get_settings(db: AsyncSession = Depends(get_db)) -> AppSettings:
     """Dependency to retrieve the application settings. Raises 404 if not found (Setup Wizard needed)."""
-    query = select(AppSettings).limit(1)
-    result = await db.execute(query)
-    settings_obj = result.scalar_one_or_none()
-
+    settings_obj = await get_app_settings(db)
     if not settings_obj:
         raise HTTPException(status_code=404, detail="Settings not configured. Run setup wizard.")
-
     return settings_obj
+

@@ -8,6 +8,7 @@ from sqlalchemy import delete, update
 from sqlalchemy.future import select
 
 from ..db.models import AppSettings, DocumentChangeLog, ProcessedDocument
+from ..db.repository import get_app_settings
 from ..db.session import AsyncSessionLocal
 from ..services.processor import DocumentProcessor
 from .events import event_broadcaster
@@ -175,9 +176,7 @@ scheduler = AsyncWorkflowScheduler()
 
 async def _get_app_settings(session) -> AppSettings | None:
     """Helper to fetch singleton AppSettings from DB."""
-    query = select(AppSettings).limit(1)
-    result = await session.execute(query)
-    return result.scalar_one_or_none()
+    return await get_app_settings(session)
 
 
 def _is_ai_backend_configured(settings: AppSettings) -> bool:

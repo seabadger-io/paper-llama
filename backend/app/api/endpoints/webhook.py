@@ -3,10 +3,9 @@ import secrets
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 
 from ...core.scheduler import trigger_workflow
-from ...db.models import AppSettings
+from ...db.repository import get_app_settings
 from ...db.session import AsyncSessionLocal, get_db
 
 router = APIRouter()
@@ -48,9 +47,7 @@ async def paperless_webhook(
         session = db
 
     try:
-        query = select(AppSettings).limit(1)
-        result = await session.execute(query)
-        settings = result.scalar_one_or_none()
+        settings = await get_app_settings(session)
 
         if settings and settings.webhook_tokens:
             accepted_tokens = [

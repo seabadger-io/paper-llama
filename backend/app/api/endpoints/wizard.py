@@ -1,15 +1,15 @@
-import json
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from ...core.constants import RESERVED_AI_PARAMS
 from ...core.security import get_password_hash
 from ...db.models import AdminUser, AppSettings
+from ...db.repository import apply_settings
 from ...db.session import get_db
+from ...schemas.settings import SetupWizardRequest
 from ...services.llamacpp import LlamaCppClient
 from ...services.ollama import OllamaClient
 from ...services.paperless import PaperlessClient
@@ -35,139 +35,6 @@ class TestPaperlessRequest(BaseModel):
     paperless_token: str
 
 
-class SetupWizardRequest(BaseModel):
-    username: str
-    password: str
-    paperless_url: str
-    paperless_token: str
-    ai_backend: str = "ollama"
-    ollama_url: str
-    ollama_model: str
-    ollama_timeout: int = 300
-    ollama_api_key: str | None = None
-    ollama_temperature: float = 0.0
-    ollama_context_size: int | None = 4096
-    ollama_extra_params: str | None = None
-    llamacpp_url: str = "http://localhost:8080"
-    llamacpp_model: str | None = None
-    llamacpp_timeout: int = 300
-    llamacpp_api_key: str | None = None
-    llamacpp_temperature: float = 0.0
-    llamacpp_max_tokens: int | None = None
-    llamacpp_extra_params: str | None = None
-    max_retries: int = 3
-    update_title: bool = True
-    update_correspondent: bool = True
-    update_document_type: bool = True
-    update_tags: bool = True
-    max_tags: int = 5
-    generate_correspondent: bool = False
-    generate_document_type: bool = False
-    generate_tags: bool = False
-    update_creation_date: bool = False
-    document_word_limit: int = 1500
-    schedule_interval_minutes: int = 0
-    webhook_tokens: str = ""
-    remove_query_tag: bool = True
-    query_tag_id: int | None = None
-    force_process_tag_id: int | None = None
-    custom_prompt: str | None = None
-    metadata_use_system_defaults: bool = True
-    metadata_owner_id: int | None = None
-    metadata_view_users: list[int] = []
-    metadata_view_groups: list[int] = []
-    metadata_edit_users: list[int] = []
-    metadata_edit_groups: list[int] = []
-    vision_fallback: str = "off"
-    vision_pages: int = 3
-    log_ai_interactions: bool = True
-    log_max_ai_chars: int = 0
-    log_retention_days: int = 0
-    log_compact_after_days: int = 30
-
-    @field_validator("password")
-    @classmethod
-    def validate_password_strength(cls, v: str) -> str:
-        if not v or len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        return v
-
-    @field_validator("username")
-    @classmethod
-    def validate_username(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("Username cannot be empty")
-        return v.strip()
-
-    @field_validator(
-        "log_max_ai_chars", "log_retention_days", "log_compact_after_days", mode="before"
-    )
-    @classmethod
-    def validate_non_negative_int(cls, v):
-        if v is None or v == "":
-            return 0
-        try:
-            val = int(v)
-        except (ValueError, TypeError):
-            raise ValueError("Value must be an integer")
-        if val < 0:
-            raise ValueError("Value cannot be negative")
-        return val
-
-    @field_validator("ollama_temperature", "llamacpp_temperature", mode="before")
-    @classmethod
-    def validate_temperature(cls, v):
-        if v is None or v == "":
-            return 0.0
-        try:
-            val = float(v)
-        except (ValueError, TypeError):
-            raise ValueError("Temperature must be a valid number")
-        if val < 0.0:
-            raise ValueError("Temperature cannot be negative")
-        return val
-
-    @field_validator("ollama_context_size", "llamacpp_max_tokens", mode="before")
-    @classmethod
-    def validate_positive_int(cls, v):
-        if v is None or v == "":
-            return None
-        try:
-            val = int(v)
-        except (ValueError, TypeError):
-            raise ValueError("Value must be an integer")
-        if val <= 0:
-            raise ValueError("Value must be greater than zero")
-        return val
-
-    @field_validator("ollama_extra_params", "llamacpp_extra_params", mode="before")
-    @classmethod
-    def validate_extra_params(cls, v):
-        if v is None:
-            return None
-        if isinstance(v, str):
-            v_str = v.strip()
-            if not v_str:
-                return None
-            try:
-                parsed = json.loads(v_str)
-            except Exception as e:
-                raise ValueError(f"Invalid JSON in extra parameters: {e}")
-        elif isinstance(v, dict):
-            parsed = v
-        else:
-            raise ValueError("Extra parameters must be a valid JSON string or object")
-
-        if not isinstance(parsed, dict):
-            raise ValueError("Extra parameters must be a JSON object (key-value mapping)")
-
-        reserved_found = [k for k in parsed.keys() if k in RESERVED_AI_PARAMS]
-        if reserved_found:
-            raise ValueError(f"Reserved parameter(s) cannot be overridden: {', '.join(reserved_found)}")
-
-        return json.dumps(parsed)
-
-
 @router.post("/wizard")
 async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depends(get_db)):
     """Run once to configure the application."""
@@ -185,61 +52,14 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
     db.add(new_admin)
 
     # Create settings
-    new_settings = AppSettings(
-        paperless_url=request.paperless_url,
-        paperless_token=request.paperless_token,
-        ai_backend=request.ai_backend,
-        ollama_url=request.ollama_url,
-        ollama_model=request.ollama_model,
-        ollama_timeout=request.ollama_timeout,
-        ollama_api_key=request.ollama_api_key,
-        ollama_temperature=request.ollama_temperature,
-        ollama_context_size=request.ollama_context_size,
-        ollama_extra_params=request.ollama_extra_params,
-        llamacpp_url=request.llamacpp_url,
-        llamacpp_model=request.llamacpp_model,
-        llamacpp_timeout=request.llamacpp_timeout,
-        llamacpp_api_key=request.llamacpp_api_key,
-        llamacpp_temperature=request.llamacpp_temperature,
-        llamacpp_max_tokens=request.llamacpp_max_tokens,
-        llamacpp_extra_params=request.llamacpp_extra_params,
-        max_retries=request.max_retries,
-        update_title=request.update_title,
-        update_correspondent=request.update_correspondent,
-        update_document_type=request.update_document_type,
-        update_tags=request.update_tags,
-        max_tags=request.max_tags,
-        generate_correspondent=request.generate_correspondent,
-        generate_document_type=request.generate_document_type,
-        generate_tags=request.generate_tags,
-        update_creation_date=request.update_creation_date,
-        document_word_limit=request.document_word_limit,
-        schedule_interval_minutes=request.schedule_interval_minutes,
-        webhook_tokens=(
-            request.webhook_tokens.strip() if request.webhook_tokens else ""
-        ),
-        remove_query_tag=request.remove_query_tag,
-        query_tag_id=request.query_tag_id,
-        force_process_tag_id=request.force_process_tag_id,
-        custom_prompt=request.custom_prompt,
-        metadata_use_system_defaults=request.metadata_use_system_defaults,
-        metadata_owner_id=request.metadata_owner_id,
-        metadata_view_users=request.metadata_view_users,
-        metadata_view_groups=request.metadata_view_groups,
-        metadata_edit_users=request.metadata_edit_users,
-        metadata_edit_groups=request.metadata_edit_groups,
-        vision_fallback=request.vision_fallback,
-        vision_pages=request.vision_pages,
-        log_ai_interactions=request.log_ai_interactions,
-        log_max_ai_chars=request.log_max_ai_chars,
-        log_retention_days=request.log_retention_days,
-        log_compact_after_days=request.log_compact_after_days,
-    )
+    new_settings = AppSettings()
+    apply_settings(new_settings, request)
     db.add(new_settings)
 
     await db.commit()
 
     return {"status": "ok", "message": "Setup completed successfully"}
+
 
 
 @router.post("/test-ollama")
