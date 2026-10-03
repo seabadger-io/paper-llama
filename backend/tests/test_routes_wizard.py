@@ -249,6 +249,48 @@ async def test_run_setup_wizard_default_metadata_and_schedule():
     assert settings_obj.metadata_use_system_defaults is True
 
 
+def test_setup_wizard_request_password_validation():
+    # Password shorter than 8 characters should fail
+    with pytest.raises(ValueError, match="at least 8 characters"):
+        wizard.SetupWizardRequest(
+            username="admin",
+            password="short",
+            paperless_url="http://test",
+            paperless_token="token",
+            ollama_url="http://test",
+            ollama_model="llama",
+        )
 
+    # Empty password should fail
+    with pytest.raises(ValueError, match="at least 8 characters"):
+        wizard.SetupWizardRequest(
+            username="admin",
+            password="",
+            paperless_url="http://test",
+            paperless_token="token",
+            ollama_url="http://test",
+            ollama_model="llama",
+        )
 
+    # Empty username should fail
+    with pytest.raises(ValueError, match="Username cannot be empty"):
+        wizard.SetupWizardRequest(
+            username="   ",
+            password="validpassword123",
+            paperless_url="http://test",
+            paperless_token="token",
+            ollama_url="http://test",
+            ollama_model="llama",
+        )
 
+    # Valid password and username should succeed
+    req = wizard.SetupWizardRequest(
+        username=" admin ",
+        password="validpassword123",
+        paperless_url="http://test",
+        paperless_token="token",
+        ollama_url="http://test",
+        ollama_model="llama",
+    )
+    assert req.username == "admin"
+    assert req.password == "validpassword123"

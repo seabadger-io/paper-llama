@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.app.api.endpoints.admin import (
+    AdminAccountUpdate,
     SettingsUpdate,
     get_current_settings,
     get_events,
@@ -10,6 +11,7 @@ from backend.app.api.endpoints.admin import (
     get_setup_status,
     reprocess_single_document,
     trigger_log_cleanup,
+    update_admin_account,
     update_settings,
 )
 from backend.app.db.models import AdminUser, AppSettings, DocumentChangeLog, ProcessedDocument
@@ -401,5 +403,49 @@ async def test_reprocess_single_document_allows_stale_processing():
         assert 103 in sched.active_document_queue
 
 
+def test_admin_account_update_validation():
+    # Password < 8 characters should fail
+    with pytest.raises(ValueError, match="at least 8 characters"):
+        AdminAccountUpdate(current_password="oldpassword", new_password="short")
+
+    # Empty new_password should fail
+    with pytest.raises(ValueError, match="at least 8 characters"):
+        AdminAccountUpdate(current_password="oldpassword", new_password="")
+
+    # Empty/whitespace new_username should fail
+    with pytest.raises(ValueError, match="cannot be empty"):
+        AdminAccountUpdate(current_password="oldpassword", new_username="   ")
+
+    # Valid data should pass
+    update = AdminAccountUpdate(
+        current_password="oldpassword",
+        new_username=" newadmin ",
+        new_password="newvalidpassword123",
+    )
+    assert update.new_username == "newadmin"
+    assert update.new_password == "newvalidpassword123"
+
+    # None new_password / new_username should pass
+    update_none = AdminAccountUpdate(current_password="oldpassword")
+    assert update_none.new_username is None
+    assert update_none.new_password is None
 
 
+@pytest.mark.asyncio
+async def test_update_admin_account_success():
+    from backend.app.core.security import get_password_hash, verify_password
+
+    user = AdminUser(username="admin", hashed_password=get_password_hash("currentpass123"))
+    mock_db = MockDB(None)
+
+    update_data = AdminAccountUpdate(
+        current_password="currentpass123",
+        new_username="updatedadmin",
+        new_password="newsecretpassword",
+    )
+
+    result = await update_admin_account(update_data, db=mock_db, current_user=user)
+    assert result == {"message": "Account updated successfully"}
+    assert user.username == "updatedadmin"
+    assert verify_password("newsecretpassword", user.hashed_password)
+    assert mock_db.commit_called_count == 1

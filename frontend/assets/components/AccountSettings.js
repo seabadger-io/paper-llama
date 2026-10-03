@@ -22,11 +22,11 @@ export default {
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700">New Password</label>
-                            <input v-model="form.new_password" type="password" placeholder="Leave blank to keep current" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <input v-model="form.new_password" type="password" minlength="8" placeholder="Leave blank to keep current (min 8 chars)" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                         </div>
                         <div v-if="form.new_password">
                             <label class="block text-sm font-medium text-gray-700">Confirm New Password</label>
-                            <input v-model="confirm_password" type="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                            <input v-model="confirm_password" type="password" minlength="8" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
                             <p v-if="form.new_password !== confirm_password && confirm_password" class="mt-1 text-xs text-red-600">Passwords do not match.</p>
                         </div>
                     </div>
@@ -78,6 +78,10 @@ export default {
     },
     methods: {
         async updateAccount() {
+            if (this.form.new_password && this.form.new_password.length < 8) {
+                this.error = 'New password must be at least 8 characters long.';
+                return;
+            }
             try {
                 this.loading = true;
                 this.error = '';

@@ -196,9 +196,15 @@ export default {
             }
         },
         goToNextStep() {
-            if (this.currentStep === 'account' && this.passwordMismatch) {
-                this.error = 'Passwords do not match.';
-                return;
+            if (this.currentStep === 'account') {
+                if (this.passwordMismatch) {
+                    this.error = 'Passwords do not match.';
+                    return;
+                }
+                if (this.settings.password && this.settings.password.length < 8) {
+                    this.error = 'Password must be at least 8 characters long.';
+                    return;
+                }
             }
             this.error = '';
             if (this.nextStep) {
@@ -220,6 +226,10 @@ export default {
         },
         async submitSetup() {
             if (this.passwordMismatch) return;
+            if (this.settings.password && this.settings.password.length < 8) {
+                this.error = 'Password must be at least 8 characters long.';
+                return;
+            }
             try {
                 this.loading = true;
                 this.error = '';
@@ -340,11 +350,11 @@ export default {
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Password</label>
-                            <input type="password" v-model="settings.password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500">
+                            <input type="password" v-model="settings.password" minlength="8" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700">Confirm Password</label>
-                            <input type="password" v-model="confirm_password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500">
+                            <input type="password" v-model="confirm_password" minlength="8" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500">
                             <p v-if="settings.password !== confirm_password && confirm_password" class="mt-1 text-xs text-red-600 font-medium">Passwords do not match.</p>
                         </div>
                     </div>

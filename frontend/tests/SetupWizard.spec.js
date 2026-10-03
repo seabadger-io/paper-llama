@@ -203,5 +203,21 @@ describe('SetupWizard Component', () => {
             webhook_tokens: ''
         }))
     })
+
+    it('validates password length on account step', async () => {
+        const wrapper = await createWrapper()
+        wrapper.vm.settings.password = '123'
+        wrapper.vm.confirm_password = '123'
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('Password must be at least 8 characters long.')
+        expect(wrapper.vm.internalStep).toBe('account')
+
+        wrapper.vm.settings.password = '12345678'
+        wrapper.vm.confirm_password = '12345678'
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('')
+        expect(wrapper.vm.internalStep).toBe('paperless')
+    })
 })
+
 

@@ -85,6 +85,20 @@ class SetupWizardRequest(BaseModel):
     log_retention_days: int = 0
     log_compact_after_days: int = 30
 
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if not v or len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        return v
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Username cannot be empty")
+        return v.strip()
+
     @field_validator(
         "log_max_ai_chars", "log_retention_days", "log_compact_after_days", mode="before"
     )

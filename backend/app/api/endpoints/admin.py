@@ -156,6 +156,23 @@ class AdminAccountUpdate(BaseModel):
     new_username: str | None = None
     new_password: str | None = None
 
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password_strength(cls, v: str | None) -> str | None:
+        if v is not None:
+            if not v or len(v) < 8:
+                raise ValueError("New password must be at least 8 characters long")
+        return v
+
+    @field_validator("new_username")
+    @classmethod
+    def validate_new_username(cls, v: str | None) -> str | None:
+        if v is not None:
+            if not v.strip():
+                raise ValueError("New username cannot be empty")
+            return v.strip()
+        return v
+
 
 class SetupStatus(BaseModel):
     is_setup: bool
