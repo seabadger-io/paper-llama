@@ -51,6 +51,29 @@ describe('SettingsView Component', () => {
         expect(wrapper.emitted('update:message')[0]).toEqual(['']);
     });
 
+    it('automatically dismisses message banner after 5 seconds', async () => {
+        vi.useFakeTimers();
+        try {
+            const wrapper = mount(SettingsView, {
+                props: {
+                    modelValue: defaultModelValue,
+                    message: 'Settings updated successfully.'
+                }
+            });
+
+            expect(wrapper.find('.message-banner').exists()).toBe(true);
+
+            vi.advanceTimersByTime(4999);
+            expect(wrapper.emitted('update:message')).toBeFalsy();
+
+            vi.advanceTimersByTime(1);
+            expect(wrapper.emitted('update:message')).toBeTruthy();
+            expect(wrapper.emitted('update:message')[0]).toEqual(['']);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('routes AI backend errors to AIBackendSettings and omits them from the bottom', () => {
         const wrapper = mount(SettingsView, {
             props: {
@@ -85,8 +108,12 @@ describe('SettingsView Component', () => {
 
         const paperlessComponent = wrapper.findComponent({ name: 'PaperlessSettings' });
         expect(paperlessComponent.exists()).toBe(true);
-        expect(paperlessComponent.props('error')).toBe('Paperless connection failed: 401 Unauthorized');
-        expect(paperlessComponent.text()).toContain('Paperless connection failed: 401 Unauthorized');
+        expect(paperlessComponent.props('error')).toBe(
+            'Paperless connection failed: 401 Unauthorized'
+        );
+        expect(paperlessComponent.text()).toContain(
+            'Paperless connection failed: 401 Unauthorized'
+        );
     });
 
     it('shows general save error in top banner and near the save button', () => {
@@ -134,7 +161,10 @@ describe('SettingsView Component', () => {
             global: {
                 mocks: {
                     $router: { push: mockPush },
-                    $route: { params: { category: 'paperless' }, path: '/dashboard/settings/paperless' }
+                    $route: {
+                        params: { category: 'paperless' },
+                        path: '/dashboard/settings/paperless'
+                    }
                 }
             }
         });
@@ -213,17 +243,21 @@ describe('SettingsView Component', () => {
             global: {
                 mocks: {
                     $router: { push: mockPush },
-                    $route: { params: { category: 'paperless' }, path: '/dashboard/settings/paperless' }
+                    $route: {
+                        params: { category: 'paperless' },
+                        path: '/dashboard/settings/paperless'
+                    }
                 }
             }
         });
 
         expect(wrapper.vm.nextCategory.id).toBe('ai');
-        const nextBtn = wrapper.findAll('form button').find((b) => b.text().includes('Next: AI Backend'));
+        const nextBtn = wrapper
+            .findAll('form button')
+            .find((b) => b.text().includes('Next: AI Backend'));
         expect(nextBtn.exists()).toBe(true);
         await nextBtn.trigger('click');
 
         expect(mockPush).toHaveBeenCalledWith('/dashboard/settings/ai');
     });
 });
-

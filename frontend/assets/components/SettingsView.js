@@ -86,7 +86,8 @@ export default {
     },
     data() {
         return {
-            internalCategory: 'paperless'
+            internalCategory: 'paperless',
+            messageTimeout: null
         };
     },
     computed: {
@@ -152,6 +153,21 @@ export default {
         }
     },
     watch: {
+        message: {
+            handler(newVal) {
+                if (this.messageTimeout) {
+                    clearTimeout(this.messageTimeout);
+                    this.messageTimeout = null;
+                }
+                if (newVal) {
+                    this.messageTimeout = setTimeout(() => {
+                        this.$emit('update:message', '');
+                        this.messageTimeout = null;
+                    }, 5000);
+                }
+            },
+            immediate: true
+        },
         error(newVal) {
             if (newVal) {
                 this.$nextTick(() => {
@@ -168,6 +184,12 @@ export default {
                     }
                 });
             }
+        }
+    },
+    unmounted() {
+        if (this.messageTimeout) {
+            clearTimeout(this.messageTimeout);
+            this.messageTimeout = null;
         }
     },
     methods: {

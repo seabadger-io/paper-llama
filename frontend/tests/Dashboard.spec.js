@@ -1,11 +1,11 @@
-import { reactive } from 'vue'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
-import Dashboard from '../assets/views/Dashboard.js'
+import { reactive } from 'vue';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mount, flushPromises } from '@vue/test-utils';
+import Dashboard from '../assets/views/Dashboard.js';
 import ActivityLogs from '../assets/components/ActivityLogs.js';
 import SettingsView from '../assets/components/SettingsView.js';
 import AccountSettings from '../assets/components/AccountSettings.js';
-import { api } from '../assets/api.js'
+import { api } from '../assets/api.js';
 
 vi.mock('../assets/api.js', () => ({
     api: {
@@ -25,56 +25,56 @@ vi.mock('../assets/api.js', () => ({
         reprocessDocument: vi.fn(),
         retryDocument: vi.fn()
     }
-}))
+}));
 
 describe('Dashboard Component', () => {
     let mockRouter;
     let mockRoute;
-    
+
     beforeEach(() => {
-        vi.clearAllMocks()
-        vi.useFakeTimers() // To handle setInterval
-        
+        vi.clearAllMocks();
+        vi.useFakeTimers(); // To handle setInterval
+
         vi.stubGlobal('localStorage', {
             removeItem: vi.fn()
-        })
-        vi.stubGlobal('alert', vi.fn())
-        
+        });
+        vi.stubGlobal('alert', vi.fn());
+
         mockRouter = {
             push: vi.fn()
-        }
+        };
         mockRoute = reactive({
             path: '/dashboard/logs',
             name: 'dashboard-logs',
             query: {}
-        })
-        
+        });
+
         // Default API mock returns for mount
         api.getLogs.mockResolvedValue({
             logs: [],
             total: 0,
             limit: 20,
             offset: 0
-        })
-        api.getProcessing.mockResolvedValue([])
+        });
+        api.getProcessing.mockResolvedValue([]);
         api.getSettings.mockResolvedValue({
             paperless_url: 'http://paperless',
             paperless_token: 'token',
             update_title: true,
             ai_backend: 'ollama',
             ollama_url: 'http://ollama'
-        })
-        api.testOllama.mockResolvedValue({ models: ['model-a'] })
-        api.testPaperless.mockResolvedValue({ tags: [], tags_count: 0 })
-        api.getPaperlessUsers.mockResolvedValue([])
-        api.getPaperlessGroups.mockResolvedValue([])
-        api.getTriggerStats.mockResolvedValue({ count: 5 })
-        api.getAdminAccount.mockResolvedValue({ username: 'admin' })
-    })
-    
+        });
+        api.testOllama.mockResolvedValue({ models: ['model-a'] });
+        api.testPaperless.mockResolvedValue({ tags: [], tags_count: 0 });
+        api.getPaperlessUsers.mockResolvedValue([]);
+        api.getPaperlessGroups.mockResolvedValue([]);
+        api.getTriggerStats.mockResolvedValue({ count: 5 });
+        api.getAdminAccount.mockResolvedValue({ username: 'admin' });
+    });
+
     afterEach(() => {
-        vi.useRealTimers()
-    })
+        vi.useRealTimers();
+    });
 
     const createWrapper = async () => {
         const wrapper = mount(Dashboard, {
@@ -90,7 +90,8 @@ describe('Dashboard Component', () => {
                             currentComponent() {
                                 if (this.$route.path.includes('/logs')) return 'activity-logs';
                                 if (this.$route.path.includes('/settings')) return 'settings-view';
-                                if (this.$route.path.includes('/account')) return 'account-settings';
+                                if (this.$route.path.includes('/account'))
+                                    return 'account-settings';
                                 return null;
                             }
                         }
@@ -98,167 +99,183 @@ describe('Dashboard Component', () => {
                     LoadingSpinner: { template: '<div class="spinner">Mock Spinner</div>' }
                 }
             }
-        })
+        });
         // wait for mount promises
-        await flushPromises()
-        return wrapper
-    }
+        await flushPromises();
+        return wrapper;
+    };
 
     it('loads data on mount and displays the Activity Logs tab', async () => {
-        const wrapper = await createWrapper()
-        
-        expect(api.getLogs).toHaveBeenCalled()
-        expect(api.getSettings).toHaveBeenCalled()
-        
-        expect(wrapper.vm.loading).toBe(false)
-        expect(wrapper.text()).toContain('Recent Processing Activity')
-        expect(wrapper.text()).toContain('No documents processed yet.')
-    })
+        const wrapper = await createWrapper();
+
+        expect(api.getLogs).toHaveBeenCalled();
+        expect(api.getSettings).toHaveBeenCalled();
+
+        expect(wrapper.vm.loading).toBe(false);
+        expect(wrapper.text()).toContain('Recent Processing Activity');
+        expect(wrapper.text()).toContain('No documents processed yet.');
+    });
 
     it('displays parsed log data correctly', async () => {
         api.getLogs.mockResolvedValueOnce({
-            logs: [{
-                id: 1,
-                document_id: 100,
-                changed_at: '2023-01-01T12:00:00Z',
-                original_state: { title: 'Invoice' },
-                new_state: { 
-                    title: 'Processed Invoice', 
-                    ai_processing_time_ms: 1500,
-                    tags: ['200 (AI Tag)', '300 (Manual Tag)'],
-                    ai_generated: { tags: [200] }
+            logs: [
+                {
+                    id: 1,
+                    document_id: 100,
+                    changed_at: '2023-01-01T12:00:00Z',
+                    original_state: { title: 'Invoice' },
+                    new_state: {
+                        title: 'Processed Invoice',
+                        ai_processing_time_ms: 1500,
+                        tags: ['200 (AI Tag)', '300 (Manual Tag)'],
+                        ai_generated: { tags: [200] }
+                    }
                 }
-            }],
+            ],
             total: 1,
             limit: 20,
             offset: 0
-        })
-        
-        const wrapper = await createWrapper()
-        
-        expect(wrapper.text()).toContain('Invoice')
-        expect(wrapper.text()).toContain('#100')
-        expect(wrapper.text()).toContain('Processed Invoice')
-        expect(wrapper.text()).toContain('1.5s')
-        
+        });
+
+        const wrapper = await createWrapper();
+
+        expect(wrapper.text()).toContain('Invoice');
+        expect(wrapper.text()).toContain('#100');
+        expect(wrapper.text()).toContain('Processed Invoice');
+        expect(wrapper.text()).toContain('1.5s');
+
         // Check for AI Tag highlight (the sparkle icon)
-        expect(wrapper.html()).toContain('✨')
-        
+        expect(wrapper.html()).toContain('✨');
+
         // Find the specific tag element for '200 (AI Tag)' and check its class
-        const aiTag = wrapper.findAll('.text-green-600')
-        expect(aiTag.length).toBe(1)
-        expect(aiTag[0].text()).toContain('200 (AI Tag)')
-    })
+        const aiTag = wrapper.findAll('.text-green-600');
+        expect(aiTag.length).toBe(1);
+        expect(aiTag[0].text()).toContain('200 (AI Tag)');
+    });
 
     it('navigates to settings tab and saves settings', async () => {
-        const wrapper = await createWrapper()
-        
+        const wrapper = await createWrapper();
+
         // Switch to settings via route mock
-        mockRoute.path = '/dashboard/settings'
-        await wrapper.vm.$forceUpdate() // Force re-render with new route mock state if needed
+        mockRoute.path = '/dashboard/settings';
+        await wrapper.vm.$forceUpdate(); // Force re-render with new route mock state if needed
         // Since we are unit testing Dashboard, we check if it pushes to router
-        await wrapper.find('button:nth-child(4)').trigger('click') // Settings button
-        expect(mockRouter.push).toHaveBeenCalledWith('/dashboard/settings')
-        
-        expect(wrapper.text()).toContain('Application Settings')
-        
-        api.updateSettings.mockResolvedValueOnce({})
-        await wrapper.vm.saveSettings()
-        
-        expect(api.updateSettings).toHaveBeenCalledWith(wrapper.vm.settings)
-        expect(wrapper.vm.message).toBe('Settings updated successfully.')
-    })
+        await wrapper.find('button:nth-child(4)').trigger('click'); // Settings button
+        expect(mockRouter.push).toHaveBeenCalledWith('/dashboard/settings');
+
+        expect(wrapper.text()).toContain('Application Settings');
+
+        vi.useFakeTimers();
+        try {
+            api.updateSettings.mockResolvedValueOnce({});
+            await wrapper.vm.saveSettings();
+
+            expect(api.updateSettings).toHaveBeenCalledWith(wrapper.vm.settings);
+            expect(wrapper.vm.message).toBe('Settings updated successfully.');
+
+            vi.advanceTimersByTime(5000);
+            expect(wrapper.vm.message).toBe('');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 
     it('switches between AI backends and tests connection accordingly', async () => {
-        const wrapper = await createWrapper()
-        
+        const wrapper = await createWrapper();
+
         // Switch to settings
-        mockRoute.path = '/dashboard/settings'
-        await wrapper.setData({ settings: { ...wrapper.vm.settings, ai_backend: 'llamacpp', llamacpp_url: 'http://llama:8080' } })
-        await flushPromises()
-        
+        mockRoute.path = '/dashboard/settings';
+        await wrapper.setData({
+            settings: {
+                ...wrapper.vm.settings,
+                ai_backend: 'llamacpp',
+                llamacpp_url: 'http://llama:8080'
+            }
+        });
+        await flushPromises();
+
         // Check UI rendering
-        expect(wrapper.text()).toContain('Llama.cpp API URL')
-        expect(wrapper.text()).not.toContain('Ollama API URL')
-        
-        api.testLlamacpp.mockResolvedValueOnce({ models: ['llama-model'] })
-        
-        await wrapper.vm.fetchModels('llamacpp', true)
-        
-        expect(api.testLlamacpp).toHaveBeenCalledWith({ llamacpp_url: 'http://llama:8080' })
-        expect(wrapper.vm.availableModels).toEqual(['llama-model'])
-    })
+        expect(wrapper.text()).toContain('Llama.cpp API URL');
+        expect(wrapper.text()).not.toContain('Ollama API URL');
+
+        api.testLlamacpp.mockResolvedValueOnce({ models: ['llama-model'] });
+
+        await wrapper.vm.fetchModels('llamacpp', true);
+
+        expect(api.testLlamacpp).toHaveBeenCalledWith({ llamacpp_url: 'http://llama:8080' });
+        expect(wrapper.vm.availableModels).toEqual(['llama-model']);
+    });
 
     it('passes API key when testing AI backend if configured', async () => {
-        const wrapper = await createWrapper()
-        mockRoute.path = '/dashboard/settings'
+        const wrapper = await createWrapper();
+        mockRoute.path = '/dashboard/settings';
         await wrapper.setData({
             settings: {
                 ...wrapper.vm.settings,
                 ai_backend: 'llamacpp',
                 llamacpp_url: 'http://llama:8080',
-                llamacpp_api_key: 'sk-secret-token',
-            },
-        })
-        await flushPromises()
+                llamacpp_api_key: 'sk-secret-token'
+            }
+        });
+        await flushPromises();
 
-        api.testLlamacpp.mockResolvedValueOnce({ models: ['llama-model'] })
-        await wrapper.vm.fetchModels('llamacpp', true)
+        api.testLlamacpp.mockResolvedValueOnce({ models: ['llama-model'] });
+        await wrapper.vm.fetchModels('llamacpp', true);
 
         expect(api.testLlamacpp).toHaveBeenCalledWith({
             llamacpp_url: 'http://llama:8080',
-            llamacpp_api_key: 'sk-secret-token',
-        })
-    })
+            llamacpp_api_key: 'sk-secret-token'
+        });
+    });
 
     it('renders the trigger processing modal with correct count', async () => {
-        const wrapper = await createWrapper()
-        
-        api.getTriggerStats.mockResolvedValueOnce({ count: 12 })
-        
+        const wrapper = await createWrapper();
+
+        api.getTriggerStats.mockResolvedValueOnce({ count: 12 });
+
         // Open modal
-        await wrapper.vm.openTriggerModal()
-        await flushPromises()
-        
-        expect(wrapper.vm.showTriggerModal).toBe(true)
-        expect(wrapper.vm.pendingCount).toBe(12)
-        expect(wrapper.text()).toContain('Found 12 documents waiting to be processed')
-        
+        await wrapper.vm.openTriggerModal();
+        await flushPromises();
+
+        expect(wrapper.vm.showTriggerModal).toBe(true);
+        expect(wrapper.vm.pendingCount).toBe(12);
+        expect(wrapper.text()).toContain('Found 12 documents waiting to be processed');
+
         // Confirm trigger
-        api.triggerProcessing.mockResolvedValueOnce({})
-        await wrapper.find('.modal-confirm').trigger('click')
-        await flushPromises()
-        
-        expect(api.triggerProcessing).toHaveBeenCalled()
-        expect(wrapper.vm.showTriggerModal).toBe(false)
-        expect(wrapper.vm.message).toContain('Processing triggered successfully')
-    })
+        api.triggerProcessing.mockResolvedValueOnce({});
+        await wrapper.find('.modal-confirm').trigger('click');
+        await flushPromises();
+
+        expect(api.triggerProcessing).toHaveBeenCalled();
+        expect(wrapper.vm.showTriggerModal).toBe(false);
+        expect(wrapper.vm.message).toContain('Processing triggered successfully');
+    });
 
     it('polls for logs every 15 seconds', async () => {
-        const wrapper = await createWrapper()
-        expect(api.getLogs).toHaveBeenCalledTimes(1) // Initial load
-        
-        vi.advanceTimersByTime(15000)
-        expect(api.getLogs).toHaveBeenCalledTimes(2) // Interval tick
-        
+        const wrapper = await createWrapper();
+        expect(api.getLogs).toHaveBeenCalledTimes(1); // Initial load
+
+        vi.advanceTimersByTime(15000);
+        expect(api.getLogs).toHaveBeenCalledTimes(2); // Interval tick
+
         // Change route away from logs
-        mockRoute.path = '/dashboard/settings'
-        vi.advanceTimersByTime(15000)
-        expect(api.getLogs).toHaveBeenCalledTimes(2) // Should NOT call refreshLogs if not on logs path
-        
-        wrapper.unmount()
-        vi.advanceTimersByTime(15000)
-        expect(api.getLogs).toHaveBeenCalledTimes(2) // No longer polling after unmount
-    })
+        mockRoute.path = '/dashboard/settings';
+        vi.advanceTimersByTime(15000);
+        expect(api.getLogs).toHaveBeenCalledTimes(2); // Should NOT call refreshLogs if not on logs path
+
+        wrapper.unmount();
+        vi.advanceTimersByTime(15000);
+        expect(api.getLogs).toHaveBeenCalledTimes(2); // No longer polling after unmount
+    });
 
     it('logs out and redirects to login', async () => {
-        const wrapper = await createWrapper()
-        
-        wrapper.vm.logout()
-        
-        expect(localStorage.removeItem).toHaveBeenCalledWith('token')
-        expect(mockRouter.push).toHaveBeenCalledWith('/login')
-    })
+        const wrapper = await createWrapper();
+
+        wrapper.vm.logout();
+
+        expect(localStorage.removeItem).toHaveBeenCalledWith('token');
+        expect(mockRouter.push).toHaveBeenCalledWith('/login');
+    });
 
     it('navigates through log pages via router', async () => {
         api.getLogs.mockResolvedValue({
@@ -266,95 +283,95 @@ describe('Dashboard Component', () => {
             total: 50,
             limit: 20,
             offset: 0
-        })
-        const wrapper = await createWrapper()
-        
+        });
+        const wrapper = await createWrapper();
+
         // Initial state
-        expect(wrapper.text()).toContain('Showing 1 to 20 of 50 entries')
-        
+        expect(wrapper.text()).toContain('Showing 1 to 20 of 50 entries');
+
         // Click Next
-        const nextButton = wrapper.findAll('button').find(b => b.text().includes('Next'))
-        await nextButton.trigger('click')
-        
+        const nextButton = wrapper.findAll('button').find((b) => b.text().includes('Next'));
+        await nextButton.trigger('click');
+
         // Should push to router instead of calling API directly
         expect(mockRouter.push).toHaveBeenCalledWith({
             path: '/dashboard/logs',
             query: { page: 2 }
-        })
+        });
 
         // Simulate watcher triggering (as it would in a real browser)
-        mockRoute.query.page = 2
-        await flushPromises()
-        
-        expect(api.getLogs).toHaveBeenCalledWith(20, 20)
-        expect(wrapper.text()).toContain('Showing 21 to 40 of 50 entries')
-    })
+        mockRoute.query.page = 2;
+        await flushPromises();
+
+        expect(api.getLogs).toHaveBeenCalledWith(20, 20);
+        expect(wrapper.text()).toContain('Showing 21 to 40 of 50 entries');
+    });
 
     it('initializes logs offset from query parameter on mount', async () => {
-        mockRoute.query.page = 3
+        mockRoute.query.page = 3;
         api.getLogs.mockResolvedValue({
             logs: [],
             total: 100,
             limit: 20,
             offset: 40
-        })
-        
-        const wrapper = await createWrapper()
-        
-        expect(api.getLogs).toHaveBeenCalledWith(20, 40)
-        expect(wrapper.text()).toContain('Showing 41 to 60 of 100 entries')
-    })
+        });
+
+        const wrapper = await createWrapper();
+
+        expect(api.getLogs).toHaveBeenCalledWith(20, 40);
+        expect(wrapper.text()).toContain('Showing 41 to 60 of 100 entries');
+    });
 
     it('connects to SSE on mount and updates processing docs on live events', async () => {
         let eventHandler;
-        const mockClose = vi.fn()
+        const mockClose = vi.fn();
         api.createEventSource.mockImplementation((onEvent) => {
-            eventHandler = onEvent
-            return { close: mockClose }
-        })
+            eventHandler = onEvent;
+            return { close: mockClose };
+        });
 
-        const wrapper = await createWrapper()
+        const wrapper = await createWrapper();
 
-        expect(api.createEventSource).toHaveBeenCalled()
+        expect(api.createEventSource).toHaveBeenCalled();
 
         // Simulate document_started event
         eventHandler({
             type: 'document_started',
             document_id: 123,
             started_at: '2026-09-27T12:00:00Z'
-        })
-        await flushPromises()
+        });
+        await flushPromises();
 
         expect(wrapper.vm.processingDocs).toEqual([
             { document_id: 123, started_at: '2026-09-27T12:00:00Z' }
-        ])
-        expect(wrapper.vm.sseConnected).toBe(true)
+        ]);
+        expect(wrapper.vm.sseConnected).toBe(true);
 
         // Simulate document_completed event
         eventHandler({
             type: 'document_completed',
             document_id: 123,
             status: 'success'
-        })
-        await flushPromises()
+        });
+        await flushPromises();
 
-        expect(wrapper.vm.processingDocs).toEqual([])
+        expect(wrapper.vm.processingDocs).toEqual([]);
 
         // Unmount component and verify event source is closed
-        wrapper.unmount()
-        expect(mockClose).toHaveBeenCalled()
-    })
+        wrapper.unmount();
+        expect(mockClose).toHaveBeenCalled();
+    });
 
     it('adds document to processingDocs on handleDocReprocess', async () => {
-        const wrapper = await createWrapper()
-        expect(wrapper.vm.processingDocs).toEqual([])
+        const wrapper = await createWrapper();
+        expect(wrapper.vm.processingDocs).toEqual([]);
 
-        wrapper.vm.handleDocReprocess(999)
-        expect(wrapper.vm.processingDocs.length).toBe(1)
-        expect(wrapper.vm.processingDocs[0].document_id).toBe(999)
+        wrapper.vm.handleDocReprocess(999);
+        expect(wrapper.vm.processingDocs.length).toBe(1);
+        expect(wrapper.vm.processingDocs[0].document_id).toBe(999);
 
         // Does not add duplicate
-        wrapper.vm.handleDocReprocess(999)
-        expect(wrapper.vm.processingDocs.length).toBe(1)
-    })
-})
+        wrapper.vm.handleDocReprocess(999);
+        expect(wrapper.vm.processingDocs.length).toBe(1);
+    });
+});

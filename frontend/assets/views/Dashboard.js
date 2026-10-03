@@ -100,6 +100,7 @@ export default {
             loading: true,
             error: '',
             message: '',
+            messageTimeout: null,
             paperlessStatus: '',
             availableUsers: [],
             availableGroups: [],
@@ -131,8 +132,18 @@ export default {
         if (this.logInterval) {
             clearInterval(this.logInterval);
         }
+        if (this.messageTimeout) {
+            clearTimeout(this.messageTimeout);
+            this.messageTimeout = null;
+        }
     },
     watch: {
+        message(val) {
+            if (!val && this.messageTimeout) {
+                clearTimeout(this.messageTimeout);
+                this.messageTimeout = null;
+            }
+        },
         '$route.query.page': {
             async handler(newPage) {
                 if (!this.$route.path.includes('/logs')) return;
@@ -231,8 +242,16 @@ export default {
             try {
                 this.error = '';
                 this.message = '';
+                if (this.messageTimeout) {
+                    clearTimeout(this.messageTimeout);
+                    this.messageTimeout = null;
+                }
                 await api.updateSettings(this.settings);
                 this.message = 'Settings updated successfully.';
+                this.messageTimeout = setTimeout(() => {
+                    this.message = '';
+                    this.messageTimeout = null;
+                }, 5000);
             } catch (e) {
                 this.error = 'Failed to update settings: ' + e.message;
             }
@@ -265,7 +284,9 @@ export default {
                 this.sseConnected = true;
             } else if (event.type === 'document_started') {
                 this.sseConnected = true;
-                const existing = this.processingDocs.find((d) => d.document_id === event.document_id);
+                const existing = this.processingDocs.find(
+                    (d) => d.document_id === event.document_id
+                );
                 if (!existing) {
                     this.processingDocs = [
                         ...this.processingDocs,
