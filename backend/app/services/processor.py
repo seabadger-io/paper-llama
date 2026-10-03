@@ -6,14 +6,14 @@ import os
 import re
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from ..core.events import event_broadcaster
 from ..db.models import AppSettings, DocumentChangeLog, ProcessedDocument
-from .llamacpp import LlamaCppClient
-from .ollama import OllamaClient
+from .ai_factory import create_ai_client
 from .paperless import PaperlessClient
 from .prompt_builder import build_prompt, build_vision_prompt
 
@@ -76,6 +76,29 @@ def _pdf_to_images_base64(
     return images
 
 
+def _truncate_preview(text: str, max_chars: int = 300) -> str:
+    """Truncate text to max_chars with an ellipsis if longer."""
+    if not text:
+        return ""
+    return text[:max_chars] + "..." if len(text) > max_chars else text
+
+
+def _format_token_usage_summary(token_usage: dict | None) -> str | None:
+    """Format token usage dictionary into a comma-separated summary string."""
+    if not isinstance(token_usage, dict):
+        return None
+    usage_parts = []
+    if token_usage.get("total_tokens") is not None:
+        usage_parts.append(f"total={token_usage['total_tokens']}")
+    if token_usage.get("prompt_tokens") is not None:
+        usage_parts.append(f"prompt={token_usage['prompt_tokens']}")
+    if token_usage.get("completion_tokens") is not None:
+        usage_parts.append(f"completion={token_usage['completion_tokens']}")
+    if token_usage.get("reasoning_tokens") is not None:
+        usage_parts.append(f"reasoning={token_usage['reasoning_tokens']}")
+    return ", ".join(usage_parts) if usage_parts else None
+
+
 def _merge_token_usages(u1: dict | None, u2: dict | None) -> dict | None:
     if not u1:
         return u2
@@ -99,34 +122,47 @@ class DocumentProcessor:
         self.paperless = PaperlessClient(
             base_url=settings.paperless_url, token=settings.paperless_token
         )
+        self.ai_client = create_ai_client(settings)
 
-        def _parse_extra_params(params: str | dict | None) -> dict:
-            if not params:
-                return {}
-            if isinstance(params, dict):
-                return params
-            try:
-                parsed = json.loads(params)
-                return parsed if isinstance(parsed, dict) else {}
-            except Exception:
-                return {}
+    @property
+    def ollama(self) -> Any:
+        if hasattr(self, "_ollama") and self._ollama is not None:
+            return self._ollama
+        return self.ai_client
 
-        self.ollama = OllamaClient(
-            base_url=settings.ollama_url or "http://localhost:11434",
-            timeout=float(settings.ollama_timeout) if settings.ollama_timeout else 300.0,
-            api_key=getattr(settings, "ollama_api_key", None),
-            temperature=getattr(settings, "ollama_temperature", 0.0),
-            context_size=getattr(settings, "ollama_context_size", 4096),
-            extra_params=_parse_extra_params(getattr(settings, "ollama_extra_params", None)),
-        )
-        self.llamacpp = LlamaCppClient(
-            base_url=settings.llamacpp_url or "http://localhost:8080",
-            timeout=float(settings.llamacpp_timeout) if settings.llamacpp_timeout else 300.0,
-            api_key=getattr(settings, "llamacpp_api_key", None),
-            temperature=getattr(settings, "llamacpp_temperature", 0.0),
-            max_tokens=getattr(settings, "llamacpp_max_tokens", None),
-            extra_params=_parse_extra_params(getattr(settings, "llamacpp_extra_params", None)),
-        )
+    @ollama.setter
+    def ollama(self, value: Any):
+        self._ollama = value
+        self.ai_client = value
+
+    @property
+    def llamacpp(self) -> Any:
+        if hasattr(self, "_llamacpp") and self._llamacpp is not None:
+            return self._llamacpp
+        return self.ai_client
+
+    @llamacpp.setter
+    def llamacpp(self, value: Any):
+        self._llamacpp = value
+        self.ai_client = value
+
+    async def _resolve_or_create_metadata_item(
+        self,
+        name: str,
+        items: list[dict],
+        cache_key: str,
+        create_fn: Any,
+        metadata_owner: int | None,
+        metadata_perms: dict | None,
+    ) -> int:
+        match = fuzzy_match(name, items)
+        if match:
+            return match["id"]
+        new_id = await create_fn(name, owner=metadata_owner, set_permissions=metadata_perms)
+        item = {"id": new_id, "name": name}
+        items.append(item)
+        DocumentProcessor._metadata_cache[cache_key].append(item)
+        return new_id
 
     def _format_ai_interaction_log(self, text: str | None) -> str | None:
         """Formats the prompt or response for changelog according to configured settings."""
@@ -171,10 +207,11 @@ class DocumentProcessor:
     ) -> str | tuple[str, dict | None]:
         """Call the configured AI backend and return the response text (and usage if requested)."""
         system_prompt = "You are a document classification AI. You output valid JSON only."
-        client = self.llamacpp if self.settings.ai_backend == "llamacpp" else self.ollama
+        backend = (getattr(self.settings, "ai_backend", None) or "ollama").lower()
+        client = self.llamacpp if backend == "llamacpp" else self.ollama
         model = (
             self.settings.llamacpp_model
-            if self.settings.ai_backend == "llamacpp"
+            if backend == "llamacpp"
             else self.settings.ollama_model
         )
 
@@ -212,14 +249,14 @@ class DocumentProcessor:
         try:
             parsed = json.loads(json_str)
         except json.JSONDecodeError as e:
-            preview = ai_response_text[:300] + ("..." if len(ai_response_text) > 300 else "")
+            preview = _truncate_preview(ai_response_text, 300)
             logger.error(
                 f"Failed to parse JSON from AI response: {e}. Raw response snippet: {preview!r}"
             )
             raise ValueError(f"Invalid JSON returned by AI ({e}): {preview!r}") from e
 
         if not isinstance(parsed, dict):
-            preview = ai_response_text[:300] + ("..." if len(ai_response_text) > 300 else "")
+            preview = _truncate_preview(ai_response_text, 300)
             logger.error(
                 f"Expected JSON object (dict) from AI response, got {type(parsed).__name__}. Raw response snippet: {preview!r}"
             )
@@ -338,19 +375,9 @@ class DocumentProcessor:
 
                     ai_processing_time_ms = int((time.perf_counter() - start_time) * 1000)
 
-                    if isinstance(token_usage, dict):
-                        usage_parts = []
-                        if token_usage.get("total_tokens") is not None:
-                            usage_parts.append(f"total={token_usage['total_tokens']}")
-                        if token_usage.get("prompt_tokens") is not None:
-                            usage_parts.append(f"prompt={token_usage['prompt_tokens']}")
-                        if token_usage.get("completion_tokens") is not None:
-                            usage_parts.append(f"completion={token_usage['completion_tokens']}")
-                        if token_usage.get("reasoning_tokens") is not None:
-                            usage_parts.append(f"reasoning={token_usage['reasoning_tokens']}")
-                        logger.info(
-                            f"Doc {document_id} AI token usage: {', '.join(usage_parts)}"
-                        )
+                    summary = _format_token_usage_summary(token_usage)
+                    if summary:
+                        logger.info(f"Doc {document_id} AI token usage: {summary}")
 
                     # 3. Figure out updates
                     original_state = {
@@ -416,34 +443,28 @@ class DocumentProcessor:
                         self.settings, "generate_correspondent", False
                     ):
                         corr_name = ai_recommended["correspondent"]
-                        match = fuzzy_match(corr_name, correspondents)
-                        if match:
-                            new_corr_id = match["id"]
-                        else:
-                            new_corr_id = await self.paperless.create_correspondent(
-                                corr_name, owner=metadata_owner, set_permissions=metadata_perms
-                            )
-                            item = {"id": new_corr_id, "name": corr_name}
-                            correspondents.append(item)
-                            DocumentProcessor._metadata_cache["correspondents"].append(item)
-
+                        new_corr_id = await self._resolve_or_create_metadata_item(
+                            corr_name,
+                            correspondents,
+                            "correspondents",
+                            self.paperless.create_correspondent,
+                            metadata_owner,
+                            metadata_perms,
+                        )
                         ai_generated_log["correspondent"] = new_corr_id
 
                     if ai_recommended.get("document_type") and getattr(
                         self.settings, "generate_document_type", False
                     ):
                         dtype_name = ai_recommended["document_type"]
-                        match = fuzzy_match(dtype_name, document_types)
-                        if match:
-                            new_dtype_id = match["id"]
-                        else:
-                            new_dtype_id = await self.paperless.create_document_type(
-                                dtype_name, owner=metadata_owner, set_permissions=metadata_perms
-                            )
-                            item = {"id": new_dtype_id, "name": dtype_name}
-                            document_types.append(item)
-                            DocumentProcessor._metadata_cache["document_types"].append(item)
-
+                        new_dtype_id = await self._resolve_or_create_metadata_item(
+                            dtype_name,
+                            document_types,
+                            "document_types",
+                            self.paperless.create_document_type,
+                            metadata_owner,
+                            metadata_perms,
+                        )
                         ai_generated_log["document_type"] = new_dtype_id
 
                     rec_tags = ai_recommended.get("tags")
@@ -452,19 +473,16 @@ class DocumentProcessor:
                     ):
                         ai_generated_log["tags"] = []
                         for tag_name in rec_tags:
-                            match = fuzzy_match(tag_name, tags)
-                            if match:
-                                new_tag_ids.append(match["id"])
-                            else:
-                                new_tag_id = await self.paperless.create_tag(
-                                    tag_name, owner=metadata_owner, set_permissions=metadata_perms
-                                )
-                                item = {"id": new_tag_id, "name": tag_name}
-                                tags.append(item)
-                                DocumentProcessor._metadata_cache["tags"].append(item)
-                                new_tag_ids.append(new_tag_id)
-
-                            ai_generated_log["tags"].append(new_tag_id)
+                            tag_id = await self._resolve_or_create_metadata_item(
+                                tag_name,
+                                tags,
+                                "tags",
+                                self.paperless.create_tag,
+                                metadata_owner,
+                                metadata_perms,
+                            )
+                            new_tag_ids.append(tag_id)
+                            ai_generated_log["tags"].append(tag_id)
                         if not ai_generated_log["tags"]:
                             del ai_generated_log["tags"]
 
@@ -579,9 +597,7 @@ class DocumentProcessor:
                 response_preview = ""
                 if ai_response_text:
                     clean_text = ai_response_text.strip()
-                    preview_text = (
-                        clean_text[:300] + "..." if len(clean_text) > 300 else clean_text
-                    )
+                    preview_text = _truncate_preview(clean_text, 300)
                     response_preview = f" | Raw AI response snippet: {preview_text!r}"
 
                 logger.warning(

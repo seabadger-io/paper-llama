@@ -614,4 +614,45 @@ def test_format_ai_interaction_log_modes(mock_settings, mock_db_session):
     assert processor._format_ai_interaction_log(sample_text) == sample_text
 
 
+def test_truncate_preview():
+    from backend.app.services.processor import _truncate_preview
+
+    assert _truncate_preview("") == ""
+    assert _truncate_preview("hello", 10) == "hello"
+    assert _truncate_preview("hello world", 5) == "hello..."
+
+
+def test_format_token_usage_summary():
+    from backend.app.services.processor import _format_token_usage_summary
+
+    assert _format_token_usage_summary(None) is None
+    assert _format_token_usage_summary({}) is None
+    usage = {"total_tokens": 150, "prompt_tokens": 100, "completion_tokens": 50}
+    summary = _format_token_usage_summary(usage)
+    assert summary == "total=150, prompt=100, completion=50"
+
+
+@pytest.mark.asyncio
+async def test_resolve_or_create_metadata_item_cached_and_new(processor):
+    items = [{"id": 1, "name": "ExistingTag"}]
+    create_fn = AsyncMock(return_value=99)
+
+    # 1. Existing item matches fuzzy
+    tag_id = await processor._resolve_or_create_metadata_item(
+        "existingtag", items, "tags", create_fn, None, None
+    )
+    assert tag_id == 1
+    create_fn.assert_not_called()
+
+    # 2. New item creates and appends to items and cache
+    new_tag_id = await processor._resolve_or_create_metadata_item(
+        "BrandNewTag", items, "tags", create_fn, 5, {"view": {"users": [1]}}
+    )
+    assert new_tag_id == 99
+    create_fn.assert_called_once_with("BrandNewTag", owner=5, set_permissions={"view": {"users": [1]}})
+    assert any(it["name"] == "BrandNewTag" and it["id"] == 99 for it in items)
+    assert any(it["name"] == "BrandNewTag" and it["id"] == 99 for it in processor._metadata_cache["tags"])
+
+
+
 
