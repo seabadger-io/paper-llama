@@ -161,7 +161,7 @@ Settings are organized into dedicated categories with direct URL navigation:
 - **Max AI Interaction Characters:** Limit the maximum character length stored per prompt and
   response (set to `0` for unlimited).
 - **Log Retention Period (Days):** Automatically prune document changelog entries older than this
-  many days (default `90` days; set to `0` to keep indefinitely).
+  many days (default: `0` to keep indefinitely).
 - **Log Compaction Period (Days):** Remove stored prompts and responses from entries older than this
   many days while preserving metadata, tags, timestamps, token metrics, and audit history (default
   `30` days; set to `0` to never compact).
@@ -206,7 +206,8 @@ docker exec -it paper-llama python reset_admin.py
 python reset_admin.py
 ```
 
-Note: the script uses `DATABASE_URL` (configured to `/app/data/paper_llama.db` inside Docker, and `data/paper_llama.db` locally).
+Note: the script uses `DATABASE_URL` (configured to `/app/data/paper_llama.db` inside Docker, and
+`data/paper_llama.db` locally).
 
 ## Testing
 
