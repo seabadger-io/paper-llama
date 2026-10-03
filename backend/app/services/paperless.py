@@ -12,12 +12,34 @@ class PaperlessClient:
         self.headers = {"Authorization": f"Token {token}", "Accept": "application/json"}
         self.timeout = 15.0
 
-    async def _get(self, endpoint: str, params: dict | None = None) -> Any:
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            url = f"{self.base_url}/api/{endpoint}"
-            response = await client.get(url, headers=self.headers, params=params)
+    async def _request(
+        self,
+        method: str,
+        endpoint_or_url: str,
+        params: dict | None = None,
+        json_data: dict | None = None,
+        timeout: float | None = None,
+        raw_bytes: bool = False,
+    ) -> Any:
+        url = (
+            endpoint_or_url
+            if endpoint_or_url.startswith("http://") or endpoint_or_url.startswith("https://")
+            else f"{self.base_url}/api/{endpoint_or_url}"
+        )
+        req_timeout = timeout if timeout is not None else self.timeout
+        async with httpx.AsyncClient(timeout=req_timeout) as client:
+            http_method = getattr(client, method.lower())
+            kwargs: dict[str, Any] = {"headers": self.headers}
+            if method.lower() in ("get", "delete") or params is not None:
+                kwargs["params"] = params
+            if json_data is not None:
+                kwargs["json"] = json_data
+            response = await http_method(url, **kwargs)
             response.raise_for_status()
-            return response.json()
+            return response.content if raw_bytes else response.json()
+
+    async def _get(self, endpoint: str, params: dict | None = None) -> Any:
+        return await self._request("get", endpoint, params=params)
 
     async def _get_all(self, endpoint: str, params: dict | None = None) -> list[dict]:
         results = []
@@ -33,26 +55,14 @@ class PaperlessClient:
         return results
 
     async def _patch(self, endpoint: str, json_data: dict) -> Any:
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            url = f"{self.base_url}/api/{endpoint}"
-            response = await client.patch(url, headers=self.headers, json=json_data)
-            response.raise_for_status()
-            return response.json()
+        return await self._request("patch", endpoint, json_data=json_data)
 
     async def _get_bytes(self, endpoint: str, params: dict | None = None) -> bytes:
         """Fetch raw bytes from a Paperless endpoint (e.g. for downloading documents)."""
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            url = f"{self.base_url}/api/{endpoint}"
-            response = await client.get(url, headers=self.headers, params=params)
-            response.raise_for_status()
-            return response.content
+        return await self._request("get", endpoint, params=params, timeout=60.0, raw_bytes=True)
 
     async def _post(self, endpoint: str, json_data: dict) -> Any:
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            url = f"{self.base_url}/api/{endpoint}"
-            response = await client.post(url, headers=self.headers, json=json_data)
-            response.raise_for_status()
-            return response.json()
+        return await self._request("post", endpoint, json_data=json_data)
 
     # --- Fetch Metadata ---
 

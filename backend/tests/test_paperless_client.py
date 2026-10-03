@@ -84,3 +84,44 @@ async def test_patch_document(mocker, paperless_client):
         json={"title": "Updated Title", "tags": [1, 2]},
     )
     assert response["title"] == "Updated Title"
+
+
+@pytest.mark.asyncio
+async def test_create_tag_post(mocker, paperless_client):
+    mock_response = mocker.Mock()
+    mock_response.json.return_value = {"id": 42, "name": "Invoice"}
+    mock_response.raise_for_status = mocker.Mock()
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.post.return_value = mock_response
+    mocker.patch("httpx.AsyncClient.__aenter__", return_value=mock_client_instance)
+
+    tag_id = await paperless_client.create_tag(name="Invoice")
+
+    mock_client_instance.post.assert_called_once_with(
+        "http://test_paperless:8000/api/tags/",
+        headers=paperless_client.headers,
+        json={"name": "Invoice", "match": "", "matching_algorithm": 6, "is_inbox_tag": False},
+    )
+    assert tag_id == 42
+
+
+@pytest.mark.asyncio
+async def test_download_document_bytes(mocker, paperless_client):
+    mock_response = mocker.Mock()
+    mock_response.content = b"%PDF-1.4 test"
+    mock_response.raise_for_status = mocker.Mock()
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.get.return_value = mock_response
+    mocker.patch("httpx.AsyncClient.__aenter__", return_value=mock_client_instance)
+
+    data = await paperless_client.download_document(123)
+
+    mock_client_instance.get.assert_called_once_with(
+        "http://test_paperless:8000/api/documents/123/download/",
+        headers=paperless_client.headers,
+        params={"original": "false"},
+    )
+    assert data == b"%PDF-1.4 test"
+
