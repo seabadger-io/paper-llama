@@ -289,6 +289,11 @@ async def get_pending_documents_count() -> int:
         return len(set(discovered) | active_ids)
 
 
+def _get_rowcount(res) -> int:
+    rc = getattr(res, "rowcount", None)
+    return rc if isinstance(rc, int) and rc >= 0 else 0
+
+
 async def perform_log_maintenance(
     session=None, settings: AppSettings | None = None
 ) -> dict[str, int]:
@@ -311,16 +316,12 @@ async def perform_log_maintenance(
         compacted_count = 0
 
         # 1. Prune logs older than log_retention_days (if > 0)
-        retention_days = getattr(settings, "log_retention_days", 90) or 0
+        retention_days = getattr(settings, "log_retention_days", 0) or 0
         if retention_days > 0:
             cutoff = now - timedelta(days=retention_days)
             del_stmt = delete(DocumentChangeLog).where(DocumentChangeLog.changed_at < cutoff)
             del_res = await session.execute(del_stmt)
-            deleted_count = (
-                del_res.rowcount
-                if del_res.rowcount is not None and del_res.rowcount >= 0
-                else 0
-            )
+            deleted_count = _get_rowcount(del_res)
 
         # 2. Compact logs older than log_compact_after_days (if > 0)
         compact_days = getattr(settings, "log_compact_after_days", 30) or 0
@@ -336,11 +337,7 @@ async def perform_log_maintenance(
                 .values(prompt_used=None, ai_response=None)
             )
             compact_res = await session.execute(compact_stmt)
-            compacted_count = (
-                compact_res.rowcount
-                if compact_res.rowcount is not None and compact_res.rowcount >= 0
-                else 0
-            )
+            compacted_count = _get_rowcount(compact_res)
 
         if deleted_count > 0 or compacted_count > 0:
             await session.commit()

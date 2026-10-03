@@ -429,6 +429,26 @@ async def test_perform_log_maintenance(mock_settings):
 
 
 @pytest.mark.asyncio
+async def test_perform_log_maintenance_default_retention():
+    """Verify that when log_retention_days is omitted/missing, default is 0 (keep indefinitely, no deletion)."""
+    mock_session = AsyncMock()
+
+    # Empty object without log_retention_days / log_compact_after_days
+    class DummySettings:
+        pass
+
+    dummy = DummySettings()
+    dummy.log_compact_after_days = 0
+    stats = await perform_log_maintenance(session=mock_session, settings=dummy)
+
+    assert stats["deleted_logs"] == 0
+    assert stats["compacted_logs"] == 0
+    mock_session.execute.assert_not_called()
+    mock_session.commit.assert_not_called()
+
+
+
+@pytest.mark.asyncio
 async def test_async_workflow_scheduler_lifecycle():
     from backend.app.core.scheduler import AsyncWorkflowScheduler
 
