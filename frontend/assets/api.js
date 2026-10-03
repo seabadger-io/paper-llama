@@ -20,7 +20,19 @@ export const api = {
         }
 
         const jsonData = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(jsonData.detail || 'Request failed');
+        if (!response.ok) {
+            let errorMsg = 'Request failed';
+            if (jsonData.detail) {
+                if (Array.isArray(jsonData.detail)) {
+                    errorMsg = jsonData.detail.map((d) => (d.msg || JSON.stringify(d))).join(', ');
+                } else if (typeof jsonData.detail === 'string') {
+                    errorMsg = jsonData.detail;
+                } else {
+                    errorMsg = JSON.stringify(jsonData.detail);
+                }
+            }
+            throw new Error(errorMsg);
+        }
         return jsonData;
     },
 

@@ -47,10 +47,23 @@ describe('SetupWizard Component', () => {
         return wrapper
     }
 
-    it('renders the initial setup form', async () => {
+    const fillValidSettings = (wrapper) => {
+        wrapper.vm.settings.username = 'admin'
+        wrapper.vm.settings.password = 'password123'
+        wrapper.vm.confirm_password = 'password123'
+        wrapper.vm.settings.paperless_url = 'http://paperless.local:8000'
+        wrapper.vm.settings.paperless_token = 'token123'
+        wrapper.vm.settings.ai_backend = 'ollama'
+        wrapper.vm.settings.ollama_url = 'http://localhost:11434'
+        wrapper.vm.settings.ollama_model = 'llama3'
+    }
+
+    it('renders the initial setup form with novalidate attribute', async () => {
         const wrapper = await createWrapper()
         expect(wrapper.text()).toContain('Initial Setup')
-        expect(wrapper.find('form').exists()).toBe(true)
+        const form = wrapper.find('form')
+        expect(form.exists()).toBe(true)
+        expect(form.attributes('novalidate')).toBeDefined()
     })
 
     it('tests Ollama connection and updates models list', async () => {
@@ -106,6 +119,7 @@ describe('SetupWizard Component', () => {
     it('submits the setup form and redirects to login on success', async () => {
         const wrapper = await createWrapper()
         api.runSetup.mockResolvedValueOnce({})
+        fillValidSettings(wrapper)
         
         // Change one of the new fields to non-default
         wrapper.vm.settings.generate_correspondent = true
@@ -135,9 +149,10 @@ describe('SetupWizard Component', () => {
 
     it('switches steps when clicking stepper item and pushes to router', async () => {
         const wrapper = await createWrapper()
+        fillValidSettings(wrapper)
         expect(wrapper.vm.currentStep).toBe('account')
 
-        await wrapper.vm.setStep('paperless')
+        await wrapper.vm.handleStepClick('paperless')
         expect(mockRouter.push).toHaveBeenCalledWith('/setup/paperless')
         expect(wrapper.vm.internalStep).toBe('paperless')
     })
@@ -162,6 +177,9 @@ describe('SetupWizard Component', () => {
     it('navigates through steps using next and back buttons', async () => {
         const wrapper = await createWrapper()
         expect(wrapper.vm.currentStep).toBe('account')
+
+        wrapper.vm.settings.password = 'password123'
+        wrapper.vm.confirm_password = 'password123'
 
         wrapper.vm.goToNextStep()
         expect(wrapper.vm.internalStep).toBe('paperless')
@@ -196,6 +214,7 @@ describe('SetupWizard Component', () => {
 
     it('allows user to clear webhook_tokens to empty string', async () => {
         const wrapper = await createWrapper()
+        fillValidSettings(wrapper)
         api.runSetup.mockResolvedValueOnce({})
         wrapper.vm.settings.webhook_tokens = ''
         await wrapper.vm.submitSetup()
@@ -204,19 +223,114 @@ describe('SetupWizard Component', () => {
         }))
     })
 
-    it('validates password length on account step', async () => {
+    it('validates account step before advancing', async () => {
         const wrapper = await createWrapper()
+        
+        // Empty password
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('Administrator password is required.')
+        expect(wrapper.vm.internalStep).toBe('account')
+
+        // Short password
         wrapper.vm.settings.password = '123'
         wrapper.vm.confirm_password = '123'
         wrapper.vm.goToNextStep()
         expect(wrapper.vm.error).toBe('Password must be at least 8 characters long.')
         expect(wrapper.vm.internalStep).toBe('account')
 
-        wrapper.vm.settings.password = '12345678'
-        wrapper.vm.confirm_password = '12345678'
+        // Password mismatch
+        wrapper.vm.settings.password = 'password123'
+        wrapper.vm.confirm_password = 'password456'
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('Passwords do not match.')
+        expect(wrapper.vm.internalStep).toBe('account')
+
+        // Empty username
+        wrapper.vm.settings.username = '   '
+        wrapper.vm.confirm_password = 'password123'
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('Administrator username is required.')
+
+        // Valid account
+        wrapper.vm.settings.username = 'admin'
         wrapper.vm.goToNextStep()
         expect(wrapper.vm.error).toBe('')
         expect(wrapper.vm.internalStep).toBe('paperless')
+    })
+
+    it('validates paperless step before advancing', async () => {
+        const wrapper = await createWrapper()
+        wrapper.vm.settings.password = 'password123'
+        wrapper.vm.confirm_password = 'password123'
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.internalStep).toBe('paperless')
+
+        // Empty URL
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('Paperless URL is required.')
+        expect(wrapper.vm.internalStep).toBe('paperless')
+
+        // Invalid URL protocol
+        wrapper.vm.settings.paperless_url = 'ftp://paperless.lan'
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('Paperless URL must start with http:// or https://.')
+
+        // Missing token
+        wrapper.vm.settings.paperless_url = 'http://paperless.lan'
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('Paperless API token is required.')
+
+        // Valid paperless
+        wrapper.vm.settings.paperless_token = 'token123'
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('')
+        expect(wrapper.vm.internalStep).toBe('ai')
+    })
+
+    it('validates ai step before advancing', async () => {
+        const wrapper = await createWrapper()
+        fillValidSettings(wrapper)
+        wrapper.vm.setStep('ai')
+
+        wrapper.vm.settings.ollama_model = ''
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('Please specify or select an Ollama model.')
+
+        wrapper.vm.settings.ollama_model = 'llama3'
+        wrapper.vm.goToNextStep()
+        expect(wrapper.vm.error).toBe('')
+        expect(wrapper.vm.internalStep).toBe('capabilities')
+    })
+
+    it('handleStepClick prevents jumping forward across invalid steps', async () => {
+        const wrapper = await createWrapper()
+        expect(wrapper.vm.currentStep).toBe('account')
+
+        // Try jumping directly to finish with empty account credentials
+        wrapper.vm.handleStepClick('logging')
+        expect(wrapper.vm.error).toBe('Administrator password is required.')
+        expect(wrapper.vm.internalStep).toBe('account')
+
+        // Fill account validly, but leave paperless empty
+        wrapper.vm.settings.password = 'password123'
+        wrapper.vm.confirm_password = 'password123'
+        wrapper.vm.handleStepClick('logging')
+        expect(wrapper.vm.error).toBe('Paperless URL is required.')
+        expect(wrapper.vm.internalStep).toBe('paperless')
+
+        // Stepper allows jumping back to account
+        wrapper.vm.handleStepClick('account')
+        expect(wrapper.vm.error).toBe('')
+        expect(wrapper.vm.internalStep).toBe('account')
+    })
+
+    it('submitSetup validates all steps and displays error if invalid', async () => {
+        const wrapper = await createWrapper()
+        // Account has missing password
+        await wrapper.vm.submitSetup()
+        expect(wrapper.vm.error).toBe('Administrator password is required.')
+        expect(wrapper.vm.internalStep).toBe('account')
+        expect(api.runSetup).not.toHaveBeenCalled()
     })
 })
 

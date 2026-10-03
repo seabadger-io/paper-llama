@@ -195,16 +195,124 @@ export default {
                 }
             }
         },
-        goToNextStep() {
-            if (this.currentStep === 'account') {
+        validateStep(stepId) {
+            if (stepId === 'account') {
+                if (!this.settings.username || !this.settings.username.trim()) {
+                    return 'Administrator username is required.';
+                }
+                if (!this.settings.password) {
+                    return 'Administrator password is required.';
+                }
+                if (this.settings.password.length < 8) {
+                    return 'Password must be at least 8 characters long.';
+                }
+                if (!this.confirm_password) {
+                    return 'Please confirm your administrator password.';
+                }
                 if (this.passwordMismatch) {
-                    this.error = 'Passwords do not match.';
+                    return 'Passwords do not match.';
+                }
+                return null;
+            }
+
+            if (stepId === 'paperless') {
+                if (!this.settings.paperless_url || !this.settings.paperless_url.trim()) {
+                    return 'Paperless URL is required.';
+                }
+                const url = this.settings.paperless_url.trim();
+                if (!/^https?:\/\//i.test(url)) {
+                    return 'Paperless URL must start with http:// or https://.';
+                }
+                if (!this.settings.paperless_token || !this.settings.paperless_token.trim()) {
+                    return 'Paperless API token is required.';
+                }
+                return null;
+            }
+
+            if (stepId === 'ai') {
+                const backend = this.settings.ai_backend || 'ollama';
+                if (backend === 'ollama') {
+                    if (!this.settings.ollama_url || !this.settings.ollama_url.trim()) {
+                        return 'Ollama API URL is required.';
+                    }
+                    if (!/^https?:\/\//i.test(this.settings.ollama_url.trim())) {
+                        return 'Ollama API URL must start with http:// or https://.';
+                    }
+                    if (!this.settings.ollama_model || !this.settings.ollama_model.trim()) {
+                        return 'Please specify or select an Ollama model.';
+                    }
+                    if (this.settings.ollama_timeout !== null && this.settings.ollama_timeout !== undefined && this.settings.ollama_timeout < 30) {
+                        return 'Ollama API timeout must be at least 30 seconds.';
+                    }
+                } else if (backend === 'llamacpp') {
+                    if (!this.settings.llamacpp_url || !this.settings.llamacpp_url.trim()) {
+                        return 'Llama.cpp API URL is required.';
+                    }
+                    if (!/^https?:\/\//i.test(this.settings.llamacpp_url.trim())) {
+                        return 'Llama.cpp API URL must start with http:// or https://.';
+                    }
+                    if (!this.settings.llamacpp_model || !this.settings.llamacpp_model.trim()) {
+                        return 'Please specify or select a Llama.cpp model.';
+                    }
+                    if (this.settings.llamacpp_timeout !== null && this.settings.llamacpp_timeout !== undefined && this.settings.llamacpp_timeout < 30) {
+                        return 'Llama.cpp API timeout must be at least 30 seconds.';
+                    }
+                }
+                return null;
+            }
+
+            if (stepId === 'capabilities') {
+                return null;
+            }
+
+            if (stepId === 'processing') {
+                if (this.settings.document_word_limit !== null && this.settings.document_word_limit !== undefined && this.settings.document_word_limit < 0) {
+                    return 'Document word limit must be 0 or greater.';
+                }
+                if (this.settings.schedule_interval_minutes !== null && this.settings.schedule_interval_minutes !== undefined && this.settings.schedule_interval_minutes < 0) {
+                    return 'Schedule interval must be 0 or greater.';
+                }
+                return null;
+            }
+
+            if (stepId === 'logging') {
+                return null;
+            }
+
+            return null;
+        },
+        handleStepClick(stepId) {
+            const targetIndex = this.steps.findIndex((s) => s.id === stepId);
+            if (targetIndex === -1) return;
+
+            // If navigating backward or staying on current step, allow freely
+            if (targetIndex <= this.currentStepIndex) {
+                this.error = '';
+                this.setStep(stepId);
+                return;
+            }
+
+            // If navigating forward, validate all prior steps up to targetIndex - 1
+            for (let i = 0; i < targetIndex; i++) {
+                const prevStepId = this.steps[i].id;
+                const err = this.validateStep(prevStepId);
+                if (err) {
+                    this.error = err;
+                    this.setStep(prevStepId);
+                    this.scrollToError();
                     return;
                 }
-                if (this.settings.password && this.settings.password.length < 8) {
-                    this.error = 'Password must be at least 8 characters long.';
-                    return;
-                }
+            }
+
+            this.error = '';
+            this.setStep(stepId);
+        },
+        goToNextStep() {
+            const err = this.validateStep(this.currentStep);
+            if (err) {
+                this.error = err;
+                this.scrollToError();
+                return;
             }
             this.error = '';
             if (this.nextStep) {
@@ -222,13 +330,26 @@ export default {
         },
         isStepCompleted(stepId) {
             const idx = this.steps.findIndex((s) => s.id === stepId);
-            return idx >= 0 && idx < this.currentStepIndex;
+            if (idx < 0 || idx >= this.currentStepIndex) return false;
+            return !this.validateStep(stepId);
+        },
+        scrollToError() {
+            this.$nextTick(() => {
+                const errorEl = this.$el?.querySelector?.('.setup-error-banner');
+                if (errorEl && typeof errorEl.scrollIntoView === 'function') {
+                    errorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
         },
         async submitSetup() {
-            if (this.passwordMismatch) return;
-            if (this.settings.password && this.settings.password.length < 8) {
-                this.error = 'Password must be at least 8 characters long.';
-                return;
+            for (const step of this.steps) {
+                const err = this.validateStep(step.id);
+                if (err) {
+                    this.error = err;
+                    this.setStep(step.id);
+                    this.scrollToError();
+                    return;
+                }
             }
             try {
                 this.loading = true;
@@ -239,7 +360,8 @@ export default {
                     router.push('/login');
                 }
             } catch (e) {
-                this.error = 'Setup failed: ' + e.message;
+                this.error = 'Setup failed: ' + (e.message || String(e));
+                this.scrollToError();
             } finally {
                 this.loading = false;
             }
@@ -274,7 +396,7 @@ export default {
                         v-for="(step, idx) in steps" 
                         :key="step.id"
                         class="flex flex-col items-center relative z-10 cursor-pointer group"
-                        @click="setStep(step.id)"
+                        @click="handleStepClick(step.id)"
                     >
                         <div 
                             :class="[
@@ -317,10 +439,10 @@ export default {
                 </div>
             </div>
             
-            <form class="space-y-6 pt-2" @submit.prevent="submitSetup">
+            <form novalidate class="space-y-6 pt-2" @submit.prevent="submitSetup">
                 
-                <!-- Error Banner -->
-                <div v-if="error" class="bg-red-50 text-red-700 p-4 rounded-xl text-sm border-l-4 border-red-500 flex items-start justify-between shadow-sm">
+                <!-- Error Banner (Top) -->
+                <div v-if="error" class="setup-error-banner bg-red-50 text-red-700 p-4 rounded-xl text-sm border-l-4 border-red-500 flex items-start justify-between shadow-sm">
                     <div class="flex items-start space-x-2">
                         <svg class="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
@@ -422,6 +544,17 @@ export default {
                             <div><strong class="text-gray-700">Retention / Compaction:</strong> {{ settings.log_retention_days }}d retention / {{ settings.log_compact_after_days }}d compaction</div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Bottom Error Banner (directly above navigation buttons) -->
+                <div v-if="error" class="bg-red-50 text-red-700 p-3.5 rounded-lg text-sm border border-red-200 flex items-start justify-between shadow-sm">
+                    <div class="flex items-start space-x-2">
+                        <svg class="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <span class="font-medium break-words">{{ error }}</span>
+                    </div>
+                    <button type="button" @click="error = ''" class="text-red-400 hover:text-red-600 focus:outline-none ml-3 font-bold text-base leading-none" title="Dismiss error">&times;</button>
                 </div>
 
                 <!-- Stepper Navigation Footer -->
