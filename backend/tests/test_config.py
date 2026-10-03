@@ -58,3 +58,27 @@ def test_login_rate_limit_settings_default_and_env(monkeypatch):
     assert disabled_cfg.LOGIN_RATE_LIMIT_PER_MINUTE == 0
 
 
+def test_reserved_ai_params():
+    from backend.app.core.constants import RESERVED_AI_PARAMS
+    from backend.app.services.llamacpp import RESERVED_KEYS as LLAMACPP_KEYS
+    from backend.app.services.ollama import RESERVED_KEYS as OLLAMA_KEYS
+
+    expected = {
+        "model",
+        "prompt",
+        "system",
+        "stream",
+        "format",
+        "images",
+        "messages",
+        "response_format",
+    }
+    assert set(RESERVED_AI_PARAMS) == expected
+    assert "format" in RESERVED_AI_PARAMS
+    assert "format" in LLAMACPP_KEYS
+    assert "format" in OLLAMA_KEYS
+    assert set(LLAMACPP_KEYS) == expected
+    assert set(OLLAMA_KEYS) == expected
+
+
+

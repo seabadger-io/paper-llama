@@ -2,19 +2,9 @@ import logging
 
 import httpx
 
+from ..core.constants import RESERVED_AI_PARAMS as RESERVED_KEYS
+
 logger = logging.getLogger(__name__)
-
-
-RESERVED_KEYS = {
-    "model",
-    "prompt",
-    "system",
-    "stream",
-    "format",
-    "images",
-    "messages",
-    "response_format",
-}
 
 
 class OllamaClient:

@@ -2,18 +2,9 @@ import logging
 
 import httpx
 
+from ..core.constants import RESERVED_AI_PARAMS as RESERVED_KEYS
+
 logger = logging.getLogger(__name__)
-
-
-RESERVED_KEYS = {
-    "model",
-    "messages",
-    "prompt",
-    "system",
-    "stream",
-    "response_format",
-    "images",
-}
 
 
 class LlamaCppClient:

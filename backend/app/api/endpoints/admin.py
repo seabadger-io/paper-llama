@@ -11,6 +11,7 @@ from sqlalchemy.future import select
 
 from ...api.deps import get_current_user, get_current_user_flexible
 from ...core.config import settings as core_settings
+from ...core.constants import RESERVED_AI_PARAMS
 from ...core.events import event_broadcaster
 from ...core.scheduler import (
     get_pending_documents_count,
@@ -26,17 +27,6 @@ from ...db.session import get_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-RESERVED_AI_PARAMS = {
-    "model",
-    "prompt",
-    "system",
-    "stream",
-    "format",
-    "images",
-    "messages",
-    "response_format",
-}
 
 
 class SettingsUpdate(BaseModel):

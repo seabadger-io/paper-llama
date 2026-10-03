@@ -6,6 +6,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
+from ...core.constants import RESERVED_AI_PARAMS
 from ...core.security import get_password_hash
 from ...db.models import AdminUser, AppSettings
 from ...db.session import get_db
@@ -15,17 +16,6 @@ from ...services.paperless import PaperlessClient
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-RESERVED_AI_PARAMS = {
-    "model",
-    "prompt",
-    "system",
-    "stream",
-    "format",
-    "images",
-    "messages",
-    "response_format",
-}
 
 
 class TestOllamaRequest(BaseModel):
