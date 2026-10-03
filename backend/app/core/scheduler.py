@@ -188,6 +188,21 @@ def _is_ai_backend_configured(settings: AppSettings) -> bool:
         return False
 
 
+def is_stale(
+    processed_at: datetime | None, max_age: timedelta = timedelta(minutes=30)
+) -> bool:
+    """Returns True if processed_at is older than max_age.
+
+    Normalizes timezone-naive datetimes to UTC to prevent TypeError.
+    Returns False if processed_at is None.
+    """
+    if not processed_at:
+        return False
+    if processed_at.tzinfo is None:
+        processed_at = processed_at.replace(tzinfo=UTC)
+    return datetime.now(UTC) - processed_at > max_age
+
+
 async def _build_document_queue(
     session, settings: AppSettings, processor: DocumentProcessor
 ) -> list[int]:
@@ -246,7 +261,7 @@ async def _build_document_queue(
             error_docs.append(doc_id)
         elif status == "processing":
             # Check for staleness (e.g., 30 minutes)
-            if processed_at and datetime.now(UTC) - processed_at > timedelta(minutes=30):
+            if is_stale(processed_at, timedelta(minutes=30)):
                 logger.warning(
                     f"Document {doc_id} has been in processing for too long. Adding to retry queue."
                 )

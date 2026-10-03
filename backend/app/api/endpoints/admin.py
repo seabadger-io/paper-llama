@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -14,6 +14,7 @@ from ...core.config import settings as core_settings
 from ...core.events import event_broadcaster
 from ...core.scheduler import (
     get_pending_documents_count,
+    is_stale,
     perform_log_maintenance,
     reprocess_document,
     trigger_workflow,
@@ -378,10 +379,7 @@ async def reprocess_single_document(
     proc_doc = result.scalar_one_or_none()
 
     if proc_doc and proc_doc.status == "processing":
-        processed_at = proc_doc.processed_at
-        if processed_at and processed_at.tzinfo is None:
-            processed_at = processed_at.replace(tzinfo=UTC)
-        if not processed_at or (datetime.now(UTC) - processed_at <= timedelta(minutes=30)):
+        if not is_stale(proc_doc.processed_at, timedelta(minutes=30)):
             raise HTTPException(
                 status_code=409,
                 detail=f"Document {document_id} is already being processed",

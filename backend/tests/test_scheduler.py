@@ -7,6 +7,7 @@ from backend.app.core.scheduler import (
     _build_document_queue,
     _run_processing_cycle,
     get_pending_documents_count,
+    is_stale,
     perform_log_maintenance,
     reprocess_document,
 )
@@ -612,6 +613,28 @@ async def test_queue_clear_and_helpers():
 
     settings.ai_backend = "invalid_backend"
     assert _is_ai_backend_configured(settings) is False
+
+
+def test_is_stale_aware_and_naive():
+    from datetime import UTC, datetime, timedelta
+
+    assert is_stale(None) is False
+
+    # Aware datetimes
+    aware_stale = datetime.now(UTC) - timedelta(minutes=35)
+    aware_fresh = datetime.now(UTC) - timedelta(minutes=10)
+    assert is_stale(aware_stale) is True
+    assert is_stale(aware_fresh) is False
+
+    # Naive UTC datetimes (e.g. SQLite strips timezone info from DateTime columns)
+    naive_stale = (datetime.now(UTC) - timedelta(minutes=35)).replace(tzinfo=None)
+    naive_fresh = (datetime.now(UTC) - timedelta(minutes=10)).replace(tzinfo=None)
+    assert is_stale(naive_stale) is True
+    assert is_stale(naive_fresh) is False
+
+    # Custom max_age
+    assert is_stale(aware_fresh, max_age=timedelta(minutes=5)) is True
+
 
 
 
