@@ -1,8 +1,6 @@
 import asyncio
 import logging
-import sys
 from datetime import UTC, datetime, timedelta
-from types import ModuleType
 
 from sqlalchemy import delete, update
 from sqlalchemy.future import select
@@ -130,12 +128,6 @@ class AsyncWorkflowScheduler:
                 pass
         elif self._wake_event:
             self._wake_event.set()
-
-    def get_job(self, job_id: str):
-        return self._task if (self.running and self._interval_minutes > 0) else None
-
-    def remove_job(self, job_id: str):
-        self.update_interval(0)
 
     async def _run_loop(self):
         while self._running:
@@ -509,51 +501,3 @@ def stop_scheduler():
     """Stops the background scheduler."""
     scheduler.shutdown(wait=False)
 
-
-class _SchedulerModule(ModuleType):
-    @property
-    def is_processing(self) -> bool:
-        return scheduler.is_processing
-
-    @is_processing.setter
-    def is_processing(self, value: bool):
-        scheduler.is_processing = value
-
-    @property
-    def processing_queued(self) -> bool:
-        return scheduler.processing_queued
-
-    @processing_queued.setter
-    def processing_queued(self, value: bool):
-        scheduler.processing_queued = value
-
-    @property
-    def active_document_queue(self) -> list[int]:
-        return scheduler.active_document_queue
-
-    @active_document_queue.setter
-    def active_document_queue(self, value: list[int]):
-        scheduler.active_document_queue = value
-
-    @property
-    def current_document_id(self) -> int | None:
-        return scheduler.current_document_id
-
-    @current_document_id.setter
-    def current_document_id(self, value: int | None):
-        scheduler.current_document_id = value
-
-    @property
-    def queue_lock(self) -> asyncio.Lock:
-        return scheduler.queue_lock
-
-    @property
-    def processing_lock(self) -> asyncio.Lock:
-        return scheduler.processing_lock
-
-    @property
-    def document_execution_lock(self) -> asyncio.Lock:
-        return scheduler.document_execution_lock
-
-
-sys.modules[__name__].__class__ = _SchedulerModule

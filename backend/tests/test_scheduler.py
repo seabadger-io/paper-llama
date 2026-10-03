@@ -16,16 +16,17 @@ from backend.app.db.models import AppSettings
 
 @pytest.fixture(autouse=True)
 def reset_scheduler_state():
-    import backend.app.core.scheduler as sched
-    sched.active_document_queue.clear()
-    sched.current_document_id = None
-    sched.is_processing = False
-    sched.processing_queued = False
+    from backend.app.core.scheduler import scheduler
+
+    scheduler.active_document_queue.clear()
+    scheduler.current_document_id = None
+    scheduler.is_processing = False
+    scheduler.processing_queued = False
     yield
-    sched.active_document_queue.clear()
-    sched.current_document_id = None
-    sched.is_processing = False
-    sched.processing_queued = False
+    scheduler.active_document_queue.clear()
+    scheduler.current_document_id = None
+    scheduler.is_processing = False
+    scheduler.processing_queued = False
 
 
 @pytest.fixture
@@ -141,72 +142,73 @@ async def test_run_processing_cycle_reprocesses_stale_docs(
 @pytest.mark.asyncio
 @patch("backend.app.core.scheduler._run_processing_cycle")
 async def test_trigger_workflow_success_resets_is_processing(mock_run_cycle):
-    import backend.app.core.scheduler as scheduler_mod
+    from backend.app.core.scheduler import scheduler, trigger_workflow
 
     # Reset states
-    scheduler_mod.is_processing = False
-    scheduler_mod.processing_queued = False
+    scheduler.is_processing = False
+    scheduler.processing_queued = False
 
     mock_run_cycle.return_value = None
 
-    await scheduler_mod.trigger_workflow()
+    await trigger_workflow()
 
     assert mock_run_cycle.call_count == 1
-    assert scheduler_mod.is_processing is False
-    assert scheduler_mod.processing_queued is False
+    assert scheduler.is_processing is False
+    assert scheduler.processing_queued is False
 
 
 @pytest.mark.asyncio
 @patch("backend.app.core.scheduler._run_processing_cycle")
 async def test_trigger_workflow_resets_is_processing_on_max_retries(mock_run_cycle):
-    import backend.app.core.scheduler as scheduler_mod
+    from backend.app.core.scheduler import scheduler, trigger_workflow
 
     # Reset states
-    scheduler_mod.is_processing = False
-    scheduler_mod.processing_queued = False
+    scheduler.is_processing = False
+    scheduler.processing_queued = False
 
     # Make the cycle raise an exception every time
     mock_run_cycle.side_effect = Exception("Processing failed")
 
     # We also mock asyncio.sleep to avoid waiting 10s between retries
     with patch("backend.app.core.scheduler.asyncio.sleep", AsyncMock()) as mock_sleep:
-        await scheduler_mod.trigger_workflow()
+        await trigger_workflow()
 
         # Verify that run_processing_cycle was called 3 times (max_retries)
         assert mock_run_cycle.call_count == 3
         # Verify that sleep was called 2 times (between the 3 attempts)
         assert mock_sleep.call_count == 2
         # Verify that is_processing is reset to False
-        assert scheduler_mod.is_processing is False
-        assert scheduler_mod.processing_queued is False
+        assert scheduler.is_processing is False
+        assert scheduler.processing_queued is False
 
 
 @pytest.mark.asyncio
 @patch("backend.app.core.scheduler._run_processing_cycle")
 async def test_trigger_workflow_queues_and_runs_again(mock_run_cycle):
-    import backend.app.core.scheduler as scheduler_mod
+    from backend.app.core.scheduler import scheduler, trigger_workflow
 
     # Reset states
-    scheduler_mod.is_processing = False
-    scheduler_mod.processing_queued = False
+    scheduler.is_processing = False
+    scheduler.processing_queued = False
 
     # We want the first cycle to queue a new request
     # To do this, we can set processing_queued to True during the execution of _run_processing_cycle
     call_count = 0
+
     async def side_effect_run():
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            scheduler_mod.processing_queued = True
+            scheduler.processing_queued = True
 
     mock_run_cycle.side_effect = side_effect_run
 
-    await scheduler_mod.trigger_workflow()
+    await trigger_workflow()
 
     # It should run twice: once for the initial call, and once for the queued call
     assert mock_run_cycle.call_count == 2
-    assert scheduler_mod.is_processing is False
-    assert scheduler_mod.processing_queued is False
+    assert scheduler.is_processing is False
+    assert scheduler.processing_queued is False
 
 
 @pytest.mark.asyncio
@@ -460,9 +462,8 @@ async def test_async_workflow_scheduler_lifecycle():
 
     sched.update_interval(5)
     assert sched._interval_minutes == 5
-    assert sched.get_job("doc_processing_job") is not None
 
-    sched.remove_job("doc_processing_job")
+    sched.update_interval(0)
     assert sched._interval_minutes == 0
 
     sched.shutdown()
@@ -501,16 +502,16 @@ async def test_async_workflow_scheduler_triggers_workflow():
 
 @pytest.mark.asyncio
 async def test_reprocess_document_enqueues_and_triggers_when_idle():
-    import backend.app.core.scheduler as sched
+    from backend.app.core.scheduler import scheduler
 
-    sched.is_processing = False
-    sched.active_document_queue.clear()
+    scheduler.is_processing = False
+    scheduler.active_document_queue.clear()
 
     with patch("backend.app.core.scheduler.trigger_workflow", new_callable=AsyncMock) as mock_trigger:
         success = await reprocess_document(document_id=77)
 
         assert success is True
-        assert 77 in sched.active_document_queue
+        assert 77 in scheduler.active_document_queue
         # Allow asyncio.create_task to run
         await asyncio.sleep(0.01)
         mock_trigger.assert_called_once_with(from_webhook=False)
@@ -518,47 +519,47 @@ async def test_reprocess_document_enqueues_and_triggers_when_idle():
 
 @pytest.mark.asyncio
 async def test_reprocess_document_enqueues_without_trigger_when_already_processing():
-    import backend.app.core.scheduler as sched
+    from backend.app.core.scheduler import scheduler
 
-    sched.is_processing = True
-    sched.active_document_queue.clear()
+    scheduler.is_processing = True
+    scheduler.active_document_queue.clear()
 
     with patch("backend.app.core.scheduler.trigger_workflow", new_callable=AsyncMock) as mock_trigger:
         success = await reprocess_document(document_id=88)
 
         assert success is True
-        assert 88 in sched.active_document_queue
+        assert 88 in scheduler.active_document_queue
         await asyncio.sleep(0.01)
         mock_trigger.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_reprocess_document_prevents_duplicate_in_active_queue():
-    import backend.app.core.scheduler as sched
+    from backend.app.core.scheduler import scheduler
 
-    sched.is_processing = True
-    sched.active_document_queue.clear()
+    scheduler.is_processing = True
+    scheduler.active_document_queue.clear()
 
     first = await reprocess_document(document_id=99)
     assert first is True
-    assert sched.active_document_queue == [99]
+    assert scheduler.active_document_queue == [99]
 
     # Attempt to re-queue the exact same document
     second = await reprocess_document(document_id=99)
     assert second is False
-    assert sched.active_document_queue == [99]
+    assert scheduler.active_document_queue == [99]
 
 
 @pytest.mark.asyncio
 async def test_reprocess_document_prevents_duplicate_when_currently_processing():
-    import backend.app.core.scheduler as sched
+    from backend.app.core.scheduler import scheduler
 
-    sched.current_document_id = 123
-    sched.active_document_queue.clear()
+    scheduler.current_document_id = 123
+    scheduler.active_document_queue.clear()
 
     success = await reprocess_document(document_id=123)
     assert success is False
-    assert sched.active_document_queue == []
+    assert scheduler.active_document_queue == []
 
 
 @pytest.mark.asyncio
@@ -568,7 +569,7 @@ async def test_reprocess_document_prevents_duplicate_when_currently_processing()
 async def test_run_processing_cycle_drains_queue_and_deduplicates(
     mock_build_queue, mock_processor_class, mock_session_local, mock_settings
 ):
-    import backend.app.core.scheduler as sched
+    from backend.app.core.scheduler import scheduler
 
     mock_session = AsyncMock()
     mock_session_local.return_value.__aenter__.return_value = mock_session
@@ -581,7 +582,7 @@ async def test_run_processing_cycle_drains_queue_and_deduplicates(
     mock_processor_class.return_value = mock_processor_instance
 
     # Document 50 is manually pre-queued
-    sched.active_document_queue = [50]
+    scheduler.active_document_queue = [50]
     # Discovered documents include 50 (duplicate) and 60 (new)
     mock_build_queue.return_value = [50, 60]
 
@@ -593,8 +594,8 @@ async def test_run_processing_cycle_drains_queue_and_deduplicates(
     mock_processor_instance.process_document.assert_any_call(60)
 
     # Queue should be fully drained and current_document_id reset to None
-    assert sched.active_document_queue == []
-    assert sched.current_document_id is None
+    assert scheduler.active_document_queue == []
+    assert scheduler.current_document_id is None
 
 
 @pytest.mark.asyncio

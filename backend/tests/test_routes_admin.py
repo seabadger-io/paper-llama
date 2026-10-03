@@ -287,10 +287,10 @@ async def test_get_events_endpoint():
 
 @pytest.mark.asyncio
 async def test_reprocess_single_document_success():
-    import backend.app.core.scheduler as sched
+    from backend.app.core.scheduler import scheduler
 
-    sched.active_document_queue.clear()
-    sched.current_document_id = None
+    scheduler.active_document_queue.clear()
+    scheduler.current_document_id = None
     mock_db = MockDB(None)
     user = AdminUser(username="admin")
 
@@ -304,7 +304,7 @@ async def test_reprocess_single_document_success():
             "message": "Document 101 added to processing queue",
             "document_id": 101,
         }
-        assert 101 in sched.active_document_queue
+        assert 101 in scheduler.active_document_queue
 
 
 @pytest.mark.asyncio
@@ -359,9 +359,9 @@ async def test_reprocess_single_document_conflict_when_currently_processing():
 async def test_reprocess_single_document_conflict_when_already_in_queue():
     from fastapi import HTTPException
 
-    import backend.app.core.scheduler as sched
+    from backend.app.core.scheduler import scheduler
 
-    sched.active_document_queue = [105]
+    scheduler.active_document_queue = [105]
     mock_db = MockDB(None)
     user = AdminUser(username="admin")
 
@@ -379,10 +379,10 @@ async def test_reprocess_single_document_conflict_when_already_in_queue():
 async def test_reprocess_single_document_allows_stale_processing():
     from datetime import UTC, datetime, timedelta
 
-    import backend.app.core.scheduler as sched
+    from backend.app.core.scheduler import scheduler
 
-    sched.active_document_queue.clear()
-    sched.current_document_id = None
+    scheduler.active_document_queue.clear()
+    scheduler.current_document_id = None
 
     stale_time = datetime.now(UTC) - timedelta(minutes=45)
     proc_doc = ProcessedDocument(
@@ -400,7 +400,7 @@ async def test_reprocess_single_document_allows_stale_processing():
             current_user=user,
         )
         assert result["document_id"] == 103
-        assert 103 in sched.active_document_queue
+        assert 103 in scheduler.active_document_queue
 
 
 def test_admin_account_update_validation():
