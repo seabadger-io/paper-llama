@@ -77,6 +77,7 @@ class SetupWizardRequest(BaseModel):
     update_creation_date: bool = False
     document_word_limit: int = 1500
     schedule_interval_minutes: int
+    webhook_tokens: str = ""
     remove_query_tag: bool = True
     query_tag_id: int | None = None
     force_process_tag_id: int | None = None
@@ -191,6 +192,9 @@ async def run_setup_wizard(request: SetupWizardRequest, db: AsyncSession = Depen
         update_creation_date=request.update_creation_date,
         document_word_limit=request.document_word_limit,
         schedule_interval_minutes=request.schedule_interval_minutes,
+        webhook_tokens=(
+            request.webhook_tokens.strip() if request.webhook_tokens else ""
+        ),
         remove_query_tag=request.remove_query_tag,
         query_tag_id=request.query_tag_id,
         force_process_tag_id=request.force_process_tag_id,

@@ -5,6 +5,26 @@ export default {
         availableTags: { type: Array, default: () => [] }
     },
     emits: ['update:modelValue'],
+    methods: {
+        generateToken() {
+            const bytes = new Uint8Array(32);
+            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+                crypto.getRandomValues(bytes);
+            } else {
+                for (let i = 0; i < 32; i++) {
+                    bytes[i] = Math.floor(Math.random() * 256);
+                }
+            }
+            const token = Array.from(bytes)
+                .map((b) => b.toString(16).padStart(2, '0'))
+                .join('');
+            if (this.modelValue.webhook_tokens && this.modelValue.webhook_tokens.trim()) {
+                this.modelValue.webhook_tokens = `${this.modelValue.webhook_tokens.trim()}, ${token}`;
+            } else {
+                this.modelValue.webhook_tokens = token;
+            }
+        }
+    },
     template: `
         <div class="space-y-4">
             <h3 class="text-lg font-medium text-gray-900 mb-4">Processing & Scheduling</h3>
@@ -19,6 +39,15 @@ export default {
                     <label class="block text-sm font-medium text-gray-700">Schedule Interval (minutes)</label>
                     <input type="number" v-model="modelValue.schedule_interval_minutes" min="0" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md sm:text-sm">
                     <p class="mt-1 text-xs text-gray-500 italic">How often the application checks for new documents (0 = manual/webhook only).</p>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between">
+                        <label class="block text-sm font-medium text-gray-700">Webhook Authentication Tokens</label>
+                        <button type="button" @click="generateToken" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Generate Token</button>
+                    </div>
+                    <input type="text" v-model="modelValue.webhook_tokens" placeholder="e.g. token1, token2" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md sm:text-sm font-mono text-xs">
+                    <p class="mt-1 text-xs text-gray-500 italic">Comma-separated list of accepted tokens for <code>/api/webhook</code>. Pass via <code>X-Webhook-Token</code> header, <code>Authorization: Bearer &lt;token&gt;</code>, or <code>?token=&lt;token&gt;</code>. Leave empty to allow unauthenticated webhooks.</p>
                 </div>
 
                 <div>

@@ -135,7 +135,14 @@ Settings are organized into dedicated categories with direct URL navigation:
   the following settings:
     - Trigger: Document added
     - Action: Webhook
-    - Webhook url: http://[paper-llama-ip:8021]/api/webhook
+    - Webhook url: `http://[paper-llama-ip:8021]/api/webhook` (or
+      `http://[paper-llama-ip:8021]/api/webhook?token=[YOUR_TOKEN]`)
+    - Webhook headers (optional): `X-Webhook-Token: [YOUR_TOKEN]` or
+      `Authorization: Bearer [YOUR_TOKEN]`
+- **Webhook Authentication Tokens:** Comma-separated list of accepted authentication tokens for the
+  `/api/webhook` endpoint. When configured, requests must supply a valid token via the
+  `X-Webhook-Token` header, `Authorization: Bearer <token>`, or `?token=<token>`. Leave empty to
+  disable token verification.
 - **Query Tag:** Tag to filter documents to be processed, selectable from a list of tags retrieved
   from your Paperless instance. If not set, all documents will be processed. It is **highly
   recommended** to set this to prevent overwriting manually set values if you have existing

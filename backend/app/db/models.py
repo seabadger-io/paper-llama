@@ -60,6 +60,7 @@ class AppSettings(Base):
     update_creation_date = Column(Boolean, default=False)
     document_word_limit = Column(Integer, default=1500)
     schedule_interval_minutes = Column(Integer, default=0)  # 0 means manual/webhook only
+    webhook_tokens = Column(String, default="", nullable=True)  # Comma-separated list of tokens
     remove_query_tag = Column(
         Boolean, default=True
     )  # Whether to remove the query tag after processing

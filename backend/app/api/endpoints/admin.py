@@ -68,6 +68,7 @@ class SettingsUpdate(BaseModel):
     update_creation_date: bool = False
     document_word_limit: int = 1500
     schedule_interval_minutes: int = 0
+    webhook_tokens: str | None = ""
     remove_query_tag: bool = True
     query_tag_id: int | None = None
     force_process_tag_id: int | None = None
@@ -83,7 +84,7 @@ class SettingsUpdate(BaseModel):
     vision_pages: int = 3
     log_ai_interactions: bool = True
     log_max_ai_chars: int = 0
-    log_retention_days: int = 90
+    log_retention_days: int = 0
     log_compact_after_days: int = 30
 
     @field_validator(
@@ -240,6 +241,7 @@ async def get_current_settings(
         else False,
         document_word_limit=settings.document_word_limit,
         schedule_interval_minutes=settings.schedule_interval_minutes,
+        webhook_tokens=settings.webhook_tokens or "",
         remove_query_tag=settings.remove_query_tag,
         query_tag_id=settings.query_tag_id,
         force_process_tag_id=settings.force_process_tag_id,
@@ -263,7 +265,7 @@ async def get_current_settings(
         else 0,
         log_retention_days=settings.log_retention_days
         if settings.log_retention_days is not None
-        else 90,
+        else 0,
         log_compact_after_days=settings.log_compact_after_days
         if settings.log_compact_after_days is not None
         else 30,
@@ -315,6 +317,9 @@ async def update_settings(
     app_settings.update_creation_date = settings_data.update_creation_date
     app_settings.document_word_limit = settings_data.document_word_limit
     app_settings.schedule_interval_minutes = settings_data.schedule_interval_minutes
+    app_settings.webhook_tokens = (
+        settings_data.webhook_tokens.strip() if settings_data.webhook_tokens else ""
+    )
     app_settings.remove_query_tag = settings_data.remove_query_tag
     app_settings.query_tag_id = settings_data.query_tag_id
     app_settings.force_process_tag_id = settings_data.force_process_tag_id

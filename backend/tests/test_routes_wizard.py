@@ -159,3 +159,46 @@ def test_wizard_validation_reserved_key():
         )
 
 
+@pytest.mark.asyncio
+async def test_run_setup_wizard_preserves_empty_webhook_tokens():
+    mock_db = MockDB(None)
+
+    request = wizard.SetupWizardRequest(
+        username="admin",
+        password="password",
+        paperless_url="http://test",
+        paperless_token="token",
+        ollama_url="http://test:11434",
+        ollama_model="llama3",
+        schedule_interval_minutes=10,
+        webhook_tokens="",
+    )
+
+    response = await wizard.run_setup_wizard(request, db=mock_db)
+    assert response["status"] == "ok"
+    settings_obj = [x for x in mock_db.added_items if isinstance(x, AppSettings)][0]
+    assert settings_obj.webhook_tokens == ""
+
+
+@pytest.mark.asyncio
+async def test_run_setup_wizard_accepts_custom_webhook_tokens():
+    mock_db = MockDB(None)
+
+    request = wizard.SetupWizardRequest(
+        username="admin",
+        password="password",
+        paperless_url="http://test",
+        paperless_token="token",
+        ollama_url="http://test:11434",
+        ollama_model="llama3",
+        schedule_interval_minutes=10,
+        webhook_tokens="my_custom_token_1, my_custom_token_2",
+    )
+
+    response = await wizard.run_setup_wizard(request, db=mock_db)
+    assert response["status"] == "ok"
+    settings_obj = [x for x in mock_db.added_items if isinstance(x, AppSettings)][0]
+    assert settings_obj.webhook_tokens == "my_custom_token_1, my_custom_token_2"
+
+
+

@@ -121,6 +121,7 @@ async def test_update_settings(mocker):
         ollama_api_key="new-key",
         llamacpp_api_key="new-llama-key",
         schedule_interval_minutes=15,
+        webhook_tokens="tok1, tok2",
     )
 
     response = await update_settings(update_data, db=mock_db, current_user=mock_user)
@@ -128,6 +129,7 @@ async def test_update_settings(mocker):
     assert response == {"message": "Settings updated successfully"}
     assert mock_settings.paperless_url == "http://new-url"
     assert mock_settings.schedule_interval_minutes == 15
+    assert mock_settings.webhook_tokens == "tok1, tok2"
     assert mock_settings.ollama_timeout == 600
     assert mock_settings.ollama_api_key == "new-key"
     assert mock_settings.llamacpp_api_key == "new-llama-key"

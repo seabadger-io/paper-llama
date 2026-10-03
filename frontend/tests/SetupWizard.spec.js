@@ -186,5 +186,22 @@ describe('SetupWizard Component', () => {
         expect(wrapper.text()).toContain('Configuration Summary')
         expect(wrapper.text()).toContain('Complete Setup & Launch 🚀')
     })
+
+    it('generates a 32-byte non-empty webhook token by default', async () => {
+        const wrapper = await createWrapper()
+        expect(wrapper.vm.settings.webhook_tokens).toBeDefined()
+        expect(wrapper.vm.settings.webhook_tokens.length).toBe(64)
+        expect(/^[0-9a-f]{64}$/i.test(wrapper.vm.settings.webhook_tokens)).toBe(true)
+    })
+
+    it('allows user to clear webhook_tokens to empty string', async () => {
+        const wrapper = await createWrapper()
+        api.runSetup.mockResolvedValueOnce({})
+        wrapper.vm.settings.webhook_tokens = ''
+        await wrapper.vm.submitSetup()
+        expect(api.runSetup).toHaveBeenCalledWith(expect.objectContaining({
+            webhook_tokens: ''
+        }))
+    })
 })
 

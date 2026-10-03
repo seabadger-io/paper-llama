@@ -52,6 +52,20 @@ const STEPS = [
     }
 ];
 
+function generateWebhookToken() {
+    const bytes = new Uint8Array(32);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+        crypto.getRandomValues(bytes);
+    } else {
+        for (let i = 0; i < 32; i++) {
+            bytes[i] = Math.floor(Math.random() * 256);
+        }
+    }
+    return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
 export default {
     components: {
         'paperless-settings': PaperlessSettings,
@@ -100,6 +114,7 @@ export default {
                 metadata_use_system_defaults: true,
                 document_word_limit: 1500,
                 schedule_interval_minutes: 5,
+                webhook_tokens: generateWebhookToken(),
                 remove_query_tag: true,
                 metadata_owner_id: null,
                 metadata_view_users: [],
@@ -110,7 +125,7 @@ export default {
                 vision_pages: 3,
                 log_ai_interactions: true,
                 log_max_ai_chars: 0,
-                log_retention_days: 90,
+                log_retention_days: 0,
                 log_compact_after_days: 30
             },
             confirm_password: '',
