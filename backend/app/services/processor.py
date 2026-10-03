@@ -394,7 +394,7 @@ class DocumentProcessor:
                     metadata_owner = None
                     metadata_perms = None
 
-                    if not getattr(self.settings, "metadata_use_system_defaults", False):
+                    if not getattr(self.settings, "metadata_use_system_defaults", True):
                         if self.settings.metadata_owner_id == -1:
                             metadata_owner = doc.get("owner")
                         else:

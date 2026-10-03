@@ -76,13 +76,13 @@ class SetupWizardRequest(BaseModel):
     generate_tags: bool = False
     update_creation_date: bool = False
     document_word_limit: int = 1500
-    schedule_interval_minutes: int
+    schedule_interval_minutes: int = 0
     webhook_tokens: str = ""
     remove_query_tag: bool = True
     query_tag_id: int | None = None
     force_process_tag_id: int | None = None
     custom_prompt: str | None = None
-    metadata_use_system_defaults: bool = False
+    metadata_use_system_defaults: bool = True
     metadata_owner_id: int | None = None
     metadata_view_users: list[int] = []
     metadata_view_groups: list[int] = []

@@ -75,7 +75,7 @@ class SettingsUpdate(BaseModel):
     force_process_tag_id: int | None = None
     custom_prompt: str | None = None
     server_timezone: str = "UTC"
-    metadata_use_system_defaults: bool = False
+    metadata_use_system_defaults: bool = True
     metadata_owner_id: int | None = None
     metadata_view_users: list[int] = []
     metadata_view_groups: list[int] = []
@@ -250,7 +250,7 @@ async def get_current_settings(
         server_timezone=core_settings.TZ,
         metadata_use_system_defaults=settings.metadata_use_system_defaults
         if settings.metadata_use_system_defaults is not None
-        else False,
+        else True,
         metadata_owner_id=settings.metadata_owner_id,
         metadata_view_users=settings.metadata_view_users or [],
         metadata_view_groups=settings.metadata_view_groups or [],

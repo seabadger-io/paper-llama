@@ -228,5 +228,27 @@ async def test_run_setup_wizard_logging_settings():
     assert settings_obj.log_compact_after_days == 7
 
 
+@pytest.mark.asyncio
+async def test_run_setup_wizard_default_metadata_and_schedule():
+    mock_db = MockDB(None)
+
+    # Omitting schedule_interval_minutes and metadata_use_system_defaults
+    request = wizard.SetupWizardRequest(
+        username="admin",
+        password="password",
+        paperless_url="http://test",
+        paperless_token="token",
+        ollama_url="http://test:11434",
+        ollama_model="llama3",
+    )
+
+    response = await wizard.run_setup_wizard(request, db=mock_db)
+    assert response["status"] == "ok"
+    settings_obj = [x for x in mock_db.added_items if isinstance(x, AppSettings)][0]
+    assert settings_obj.schedule_interval_minutes == 0
+    assert settings_obj.metadata_use_system_defaults is True
+
+
+
 
 
