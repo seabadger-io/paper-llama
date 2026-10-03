@@ -6,6 +6,7 @@ import CapabilitiesSettings from '../components/CapabilitiesSettings.js';
 import MetadataPermissionsSettings from '../components/MetadataPermissionsSettings.js';
 import DocumentQuerySettings from '../components/DocumentQuerySettings.js';
 import LoggingSettings from '../components/LoggingSettings.js';
+import { generateWebhookToken } from '../utils/crypto.js';
 
 const STEPS = [
     {
@@ -51,20 +52,6 @@ const STEPS = [
         subtitle: 'Retention policies, review configuration, and finalize'
     }
 ];
-
-function generateWebhookToken() {
-    const bytes = new Uint8Array(32);
-    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-        crypto.getRandomValues(bytes);
-    } else {
-        for (let i = 0; i < 32; i++) {
-            bytes[i] = Math.floor(Math.random() * 256);
-        }
-    }
-    return Array.from(bytes)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
-}
 
 export default {
     components: {

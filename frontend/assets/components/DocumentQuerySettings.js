@@ -1,3 +1,5 @@
+import { generateWebhookToken } from '../utils/crypto.js';
+
 export default {
     name: 'DocumentQuerySettings',
     props: {
@@ -7,17 +9,7 @@ export default {
     emits: ['update:modelValue'],
     methods: {
         generateToken() {
-            const bytes = new Uint8Array(32);
-            if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-                crypto.getRandomValues(bytes);
-            } else {
-                for (let i = 0; i < 32; i++) {
-                    bytes[i] = Math.floor(Math.random() * 256);
-                }
-            }
-            const token = Array.from(bytes)
-                .map((b) => b.toString(16).padStart(2, '0'))
-                .join('');
+            const token = generateWebhookToken();
             if (this.modelValue.webhook_tokens && this.modelValue.webhook_tokens.trim()) {
                 this.modelValue.webhook_tokens = `${this.modelValue.webhook_tokens.trim()}, ${token}`;
             } else {
